@@ -1,0 +1,5 @@
+# System Panel Requirements
+# Panel administracyjny port 9797
+
+flask>=3.0.0
+psutil>=5.9.0

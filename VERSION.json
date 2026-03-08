@@ -1,0 +1,20 @@
+{
+  "version": "6.1.2",
+  "codename": "GLaDOS Voice Reborn",
+  "build": 6,
+  "updated": "2026-03-06 21:49:49",
+  "changelog": [
+    "v6.1.2 - TTS po polsku (Paulina/Zofia/pl-PL), naprawa g4f providers, polski fallback, kompletna polonizacja UI",
+    "v6.1.1 - Naprawa g4f: provider chain (OperaAria/Yqcloud/ApiAirforce), fallback po polsku, fix routingu konwersacji",
+    "v6.1.0 - Pełna polonizacja: boot, terminal, aktywność, alerty, codelab, UI. System prompt wzmocniony dla polskiego.",
+    "v6.0.2 - Auto-speak: GLaDOS czyta odpowiedzi chatu głosem po polsku",
+    "v6.0.2 - Rozpoznawanie mowy zmienione na pl-PL",
+    "v6.0.1 - Test auto-bump wersji",
+    "v6.0.0 - Przebudowa systemu głosu GLaDOS (autentyczny styl Portal)",
+    "v6.0.0 - Nowy system prompt z profilem emocji 80/15/5",
+    "v6.0.0 - Web Audio API: vocoder, ambient hum, processing beeps",
+    "v6.0.0 - Mikro-pauzy między frazami (symulacja przetwarzania danych)",
+    "v6.0.0 - GLaDOSAudioProcessor class z startup/shutdown chime",
+    "v6.0.0 - Automatyczny system wersjonowania"
+  ]
+}

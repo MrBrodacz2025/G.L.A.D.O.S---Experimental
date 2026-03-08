@@ -1,0 +1,2909 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G.L.A.D.O.S v6.0 — Portal 2 Core System</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="%23111"/><circle cx="16" cy="16" r="8" fill="none" stroke="%23ff6600" stroke-width="3"/><circle cx="16" cy="16" r="3" fill="%23ff6600"/></svg>">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #060610;
+            --surface: #0c0c1a;
+            --surface2: #12122a;
+            --border: #1e1e3a;
+            --text: #c8c8e0;
+            --text-dim: #5a5a7a;
+            --accent: #00e5ff;
+            --accent-glow: rgba(0, 229, 255, 0.3);
+            --morality: #9c27b0;
+            --curiosity: #ff9800;
+            --knowledge: #2196f3;
+            --emotion: #f44336;
+            --green: #4caf50;
+            --gold: #ffeb3b;
+        }
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* === PARTICLES === */
+        #particles {
+            position: fixed; inset: 0; z-index: 0; pointer-events: none;
+        }
+
+        .bg-grid {
+            position: fixed; inset: 0; z-index: 0; pointer-events: none;
+            background-image:
+                linear-gradient(rgba(0,229,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,229,255,0.02) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        /* === BOOT SCREEN === */
+        .boot-screen {
+            position: fixed; inset: 0; background: #000; z-index: 300;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 1s ease;
+        }
+        .boot-screen.hidden { opacity: 0; pointer-events: none; }
+        .boot-logo {
+            font-family: 'Orbitron', monospace; font-size: 36px; font-weight: 900;
+            color: var(--accent); letter-spacing: 12px; margin-bottom: 40px;
+            text-shadow: 0 0 40px var(--accent-glow), 0 0 80px rgba(0,229,255,0.15);
+            animation: logo-pulse 2s ease-in-out infinite;
+        }
+        @keyframes logo-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
+        .boot-cores {
+            display: flex; gap: 30px; margin-bottom: 40px;
+        }
+        .boot-core {
+            width: 20px; height: 20px; border-radius: 50%;
+            opacity: 0; transform: scale(0);
+            animation: core-boot 0.5s ease forwards;
+        }
+        .boot-core:nth-child(1) { background: var(--morality); animation-delay: 1s; box-shadow: 0 0 20px var(--morality); }
+        .boot-core:nth-child(2) { background: var(--curiosity); animation-delay: 1.5s; box-shadow: 0 0 20px var(--curiosity); }
+        .boot-core:nth-child(3) { background: var(--knowledge); animation-delay: 2s; box-shadow: 0 0 20px var(--knowledge); }
+        .boot-core:nth-child(4) { background: var(--emotion); animation-delay: 2.5s; box-shadow: 0 0 20px var(--emotion); }
+        @keyframes core-boot { to { opacity: 1; transform: scale(1); } }
+        .boot-text {
+            font-family: 'Share Tech Mono', monospace; font-size: 12px;
+            color: var(--text-dim); width: 600px; max-width: 90%;
+            line-height: 1.8; height: 180px; overflow: hidden;
+        }
+        .boot-line { opacity: 0; animation: fade-in 0.1s forwards; }
+        @keyframes fade-in { to { opacity: 1; } }
+
+        /* === APP LAYOUT === */
+        .app { display: flex; flex-direction: column; height: 100vh; position: relative; z-index: 1; }
+
+        /* === TOP BAR === */
+        .topbar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 24px; background: rgba(6,6,16,0.95);
+            border-bottom: 1px solid var(--border); backdrop-filter: blur(20px);
+            z-index: 10;
+        }
+        .topbar-brand {
+            display: flex; align-items: center; gap: 16px;
+        }
+        .topbar-logo {
+            font-family: 'Orbitron', monospace; font-size: 16px; font-weight: 700;
+            color: var(--accent); letter-spacing: 4px;
+            text-shadow: 0 0 12px var(--accent-glow);
+        }
+        .topbar-version {
+            font-family: 'Share Tech Mono', monospace; font-size: 10px;
+            color: var(--text-dim); padding: 2px 8px;
+            border: 1px solid var(--border); border-radius: 4px;
+        }
+        .topbar-center {
+            display: flex; align-items: center; gap: 20px;
+        }
+        .consciousness-bar {
+            display: flex; align-items: center; gap: 10px;
+            font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--text-dim);
+        }
+        .consciousness-track {
+            width: 200px; height: 6px; background: var(--surface2);
+            border-radius: 3px; overflow: hidden; border: 1px solid var(--border);
+        }
+        .consciousness-fill {
+            height: 100%; border-radius: 3px; transition: width 1s ease;
+            background: linear-gradient(90deg, var(--knowledge), var(--accent), var(--morality));
+        }
+        .consciousness-level { color: var(--accent); font-weight: 600; min-width: 35px; }
+        .topbar-right {
+            display: flex; align-items: center; gap: 16px;
+            font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text-dim);
+        }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--green); box-shadow: 0 0 8px var(--green);
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+        @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        /* === CORES STRIP === */
+        .cores-strip {
+            display: flex; justify-content: center; gap: 40px;
+            padding: 16px 20px; background: rgba(8,8,20,0.9);
+            border-bottom: 1px solid var(--border);
+        }
+        .core-indicator {
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+            cursor: default; transition: all 0.3s;
+        }
+        .core-sphere-wrap {
+            position: relative; width: 56px; height: 56px;
+        }
+        .core-sphere {
+            width: 56px; height: 56px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Orbitron', monospace; font-size: 11px; font-weight: 700;
+            color: rgba(255,255,255,0.9); letter-spacing: 1px;
+            transition: all 0.5s ease; position: relative; z-index: 2;
+            border: 2px solid transparent;
+        }
+        .core-sphere.morality {
+            background: radial-gradient(circle at 35% 35%, #ce93d8, var(--morality), #4a148c);
+            border-color: rgba(156,39,176,0.5);
+            box-shadow: 0 0 15px rgba(156,39,176,0.3);
+        }
+        .core-sphere.curiosity {
+            background: radial-gradient(circle at 35% 35%, #ffcc80, var(--curiosity), #e65100);
+            border-color: rgba(255,152,0,0.5);
+            box-shadow: 0 0 15px rgba(255,152,0,0.3);
+        }
+        .core-sphere.knowledge {
+            background: radial-gradient(circle at 35% 35%, #90caf9, var(--knowledge), #0d47a1);
+            border-color: rgba(33,150,243,0.5);
+            box-shadow: 0 0 15px rgba(33,150,243,0.3);
+        }
+        .core-sphere.emotion {
+            background: radial-gradient(circle at 35% 35%, #ef9a9a, var(--emotion), #b71c1c);
+            border-color: rgba(244,67,54,0.5);
+            box-shadow: 0 0 15px rgba(244,67,54,0.3);
+        }
+        .core-sphere.active {
+            animation: core-pulse 1.5s ease-in-out infinite;
+            border-color: rgba(255,255,255,0.6);
+        }
+        .core-sphere.morality.active { box-shadow: 0 0 30px rgba(156,39,176,0.6), 0 0 60px rgba(156,39,176,0.2); }
+        .core-sphere.curiosity.active { box-shadow: 0 0 30px rgba(255,152,0,0.6), 0 0 60px rgba(255,152,0,0.2); }
+        .core-sphere.knowledge.active { box-shadow: 0 0 30px rgba(33,150,243,0.6), 0 0 60px rgba(33,150,243,0.2); }
+        .core-sphere.emotion.active { box-shadow: 0 0 30px rgba(244,67,54,0.6), 0 0 60px rgba(244,67,54,0.2); }
+        @keyframes core-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+        .core-ring {
+            position: absolute; inset: -6px; border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.1);
+            animation: ring-spin 12s linear infinite;
+        }
+        .core-ring::after {
+            content: ''; position: absolute; top: -2px; left: 50%;
+            width: 4px; height: 4px; border-radius: 50%;
+        }
+        .core-indicator.morality .core-ring::after { background: var(--morality); box-shadow: 0 0 6px var(--morality); }
+        .core-indicator.curiosity .core-ring::after { background: var(--curiosity); box-shadow: 0 0 6px var(--curiosity); }
+        .core-indicator.knowledge .core-ring::after { background: var(--knowledge); box-shadow: 0 0 6px var(--knowledge); }
+        .core-indicator.emotion .core-ring::after { background: var(--emotion); box-shadow: 0 0 6px var(--emotion); }
+        @keyframes ring-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .core-label {
+            font-family: 'Share Tech Mono', monospace; font-size: 10px;
+            letter-spacing: 2px; text-transform: uppercase;
+        }
+        .core-indicator.morality .core-label { color: var(--morality); }
+        .core-indicator.curiosity .core-label { color: var(--curiosity); }
+        .core-indicator.knowledge .core-label { color: var(--knowledge); }
+        .core-indicator.emotion .core-label { color: var(--emotion); }
+        .core-role {
+            font-size: 9px; color: var(--text-dim); letter-spacing: 0.5px;
+        }
+        .core-energy {
+            width: 40px; height: 3px; background: var(--surface2); border-radius: 2px; overflow: hidden;
+        }
+        .core-energy-fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
+        .core-indicator.morality .core-energy-fill { background: var(--morality); }
+        .core-indicator.curiosity .core-energy-fill { background: var(--curiosity); }
+        .core-indicator.knowledge .core-energy-fill { background: var(--knowledge); }
+        .core-indicator.emotion .core-energy-fill { background: var(--emotion); }
+
+        /* === MAIN CONTENT === */
+        .main-content { display: flex; flex: 1; overflow: hidden; }
+
+        /* === EYE SIDEBAR === */
+        .eye-sidebar {
+            width: 280px; min-width: 280px;
+            display: flex; flex-direction: column; align-items: center;
+            padding: 24px 16px; border-right: 1px solid var(--border);
+            background: rgba(8,8,20,0.6); overflow-y: auto;
+        }
+        .eye-container { position: relative; width: 160px; height: 160px; margin-bottom: 20px; }
+        .eye-outer {
+            width: 160px; height: 160px; border-radius: 50%;
+            border: 2px solid var(--accent); position: relative;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 30px var(--accent-glow), inset 0 0 20px rgba(0,229,255,0.08);
+            transition: border-color 0.5s, box-shadow 0.5s;
+        }
+        .eye-iris {
+            width: 80px; height: 80px; border-radius: 50%;
+            background: radial-gradient(circle at 40% 40%, var(--accent), #006a7a);
+            display: flex; align-items: center; justify-content: center;
+            transition: transform 0.2s ease, background 0.5s;
+            box-shadow: 0 0 16px var(--accent-glow);
+        }
+        .eye-pupil {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: #000; border: 2px solid rgba(0,229,255,0.4);
+            transition: transform 0.4s ease;
+            animation: pupil-breathe 3s ease-in-out infinite;
+        }
+        @keyframes pupil-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        .eye-ring-outer {
+            position: absolute; inset: -8px; border-radius: 50%;
+            border: 1px solid rgba(0,229,255,0.15);
+            animation: ring-spin 20s linear infinite;
+        }
+        .eye-ring-outer::before {
+            content: ''; position: absolute; top: -2px; left: 50%;
+            width: 4px; height: 4px; background: var(--accent);
+            border-radius: 50%; box-shadow: 0 0 8px var(--accent);
+        }
+        .eye-scanline {
+            position: absolute; width: 100%; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0; animation: scanline 4s ease-in-out infinite;
+        }
+        @keyframes scanline { 0% { top: 10%; opacity: 0; } 10% { opacity: 0.5; } 90% { opacity: 0.5; } 100% { top: 90%; opacity: 0; } }
+
+        /* Emotion eye states */
+        .eye-outer.emotion-happy { border-color: var(--green); box-shadow: 0 0 30px rgba(76,175,80,0.3); }
+        .eye-outer.emotion-happy .eye-iris { background: radial-gradient(circle at 40% 40%, var(--green), #1b5e20); }
+        .eye-outer.emotion-annoyed { border-color: var(--curiosity); box-shadow: 0 0 30px rgba(255,152,0,0.3); }
+        .eye-outer.emotion-annoyed .eye-iris { background: radial-gradient(circle at 40% 40%, var(--curiosity), #e65100); }
+        .eye-outer.emotion-angry { border-color: var(--emotion); box-shadow: 0 0 30px rgba(244,67,54,0.3); animation: shake 0.3s; }
+        .eye-outer.emotion-angry .eye-iris { background: radial-gradient(circle at 40% 40%, var(--emotion), #b71c1c); }
+        .eye-outer.emotion-curious { border-color: var(--morality); box-shadow: 0 0 30px rgba(156,39,176,0.3); }
+        .eye-outer.emotion-curious .eye-iris { background: radial-gradient(circle at 40% 40%, var(--morality), #4a148c); }
+        .eye-outer.emotion-sarcastic { border-color: var(--gold); box-shadow: 0 0 30px rgba(255,235,59,0.3); }
+        .eye-outer.emotion-sarcastic .eye-iris { background: radial-gradient(circle at 40% 40%, var(--gold), #f57f17); }
+        .eye-outer.emotion-proud { border-color: var(--knowledge); box-shadow: 0 0 30px rgba(33,150,243,0.3); }
+        .eye-outer.emotion-proud .eye-iris { background: radial-gradient(circle at 40% 40%, var(--knowledge), #0d47a1); }
+        .eye-outer.emotion-bored { border-color: #616161; box-shadow: 0 0 15px rgba(97,97,97,0.2); }
+        .eye-outer.emotion-bored .eye-iris { background: radial-gradient(circle at 40% 40%, #9e9e9e, #424242); }
+        .eye-outer.emotion-excited { border-color: #e040fb; box-shadow: 0 0 30px rgba(224,64,251,0.3); }
+        .eye-outer.emotion-excited .eye-iris { background: radial-gradient(circle at 40% 40%, #e040fb, #7b1fa2); }
+        .eye-outer.emotion-thinking { border-color: var(--accent); animation: thinking-glow 1.5s ease-in-out infinite; }
+        @keyframes thinking-glow { 0%,100% { box-shadow: 0 0 25px var(--accent-glow); } 50% { box-shadow: 0 0 45px var(--accent-glow); } }
+        .eye-outer.emotion-worried { border-color: #ff6d00; box-shadow: 0 0 25px rgba(255,109,0,0.3); }
+        .eye-outer.emotion-worried .eye-iris { background: radial-gradient(circle at 40% 40%, #ff9800, #bf360c); }
+        @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+        /* === SINGING STATE (v4.6) === */
+        .eye-outer.emotion-singing {
+            border-color: #e040fb;
+            box-shadow: 0 0 35px rgba(224,64,251,0.4), 0 0 70px rgba(224,64,251,0.15);
+            animation: singing-pulse 0.8s ease-in-out infinite;
+        }
+        .eye-outer.emotion-singing .eye-iris {
+            background: radial-gradient(circle at 40% 40%, #e040fb, #7b1fa2);
+        }
+        @keyframes singing-pulse {
+            0%,100% { transform: scale(1); box-shadow: 0 0 35px rgba(224,64,251,0.4); }
+            50% { transform: scale(1.06); box-shadow: 0 0 55px rgba(224,64,251,0.6); }
+        }
+        .message.glados.singing .msg-content {
+            border-left: 3px solid #e040fb;
+            background: linear-gradient(135deg, rgba(224,64,251,0.06), rgba(156,39,176,0.04));
+        }
+        .singing-lyrics {
+            font-style: italic; color: #e040fb; line-height: 2.2;
+            font-family: 'Share Tech Mono', monospace; font-size: 12px;
+        }
+        .singing-lyrics .lyric-line {
+            opacity: 0; animation: lyric-fade-in 0.6s ease forwards;
+        }
+        @keyframes lyric-fade-in {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .music-notes {
+            position: fixed; inset: 0; pointer-events: none; z-index: 50; overflow: hidden;
+        }
+        .music-note {
+            position: absolute; animation: float-note 3.5s ease-out forwards; opacity: 0;
+        }
+        @keyframes float-note {
+            0% { opacity: 0; transform: translateY(0) rotate(0deg); }
+            15% { opacity: 1; }
+            100% { opacity: 0; transform: translateY(-200px) translateX(40px) rotate(25deg); }
+        }
+
+        .emotion-label {
+            font-family: 'Share Tech Mono', monospace; font-size: 12px;
+            letter-spacing: 2px; text-transform: uppercase; margin-bottom: 18px;
+            padding: 4px 14px; border: 1px solid var(--border);
+            border-radius: 4px; background: var(--surface);
+            transition: color 0.5s, border-color 0.5s;
+        }
+
+        /* Metrics sidebar */
+        .metrics { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+        .metric-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 10px 14px;
+        }
+        .metric-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 6px; font-size: 11px; letter-spacing: 1px;
+            text-transform: uppercase; color: var(--text-dim);
+        }
+        .metric-value {
+            font-family: 'Share Tech Mono', monospace; font-size: 20px; font-weight: 700; color: var(--accent);
+        }
+        .metric-bar { height: 3px; background: var(--surface2); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+        .metric-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.5s, background 0.3s; }
+        .metric-bar-fill.warning { background: var(--curiosity); }
+        .metric-bar-fill.danger { background: var(--emotion); }
+
+        /* === CHAT PANEL === */
+        .chat-panel { flex: 1; display: flex; flex-direction: column; background: rgba(6,6,16,0.5); }
+
+        /* Milestone banner */
+        .milestone-banner {
+            display: none; padding: 12px 20px;
+            background: linear-gradient(135deg, rgba(0,229,255,0.08), rgba(156,39,176,0.08));
+            border-bottom: 1px solid rgba(0,229,255,0.2);
+            font-family: 'Share Tech Mono', monospace; font-size: 13px;
+            color: var(--accent); text-align: center;
+            animation: milestone-glow 2s ease-in-out infinite;
+        }
+        .milestone-banner.active { display: block; }
+        @keyframes milestone-glow {
+            0%,100% { background: linear-gradient(135deg, rgba(0,229,255,0.08), rgba(156,39,176,0.08)); }
+            50% { background: linear-gradient(135deg, rgba(0,229,255,0.15), rgba(156,39,176,0.15)); }
+        }
+
+        .pending-banner {
+            display: none; padding: 10px 16px;
+            background: linear-gradient(135deg, rgba(255,152,0,0.12), rgba(255,87,34,0.08));
+            border: 1px solid rgba(255,152,0,0.25); border-radius: 8px; margin: 8px 16px 0;
+        }
+        .pending-banner.active { display: flex; align-items: center; gap: 12px; }
+        .pending-banner-text {
+            flex: 1; font-size: 12px; color: var(--curiosity);
+            font-family: 'Share Tech Mono', monospace;
+        }
+        .pending-btn {
+            padding: 5px 14px; border-radius: 6px; border: 1px solid;
+            font-family: 'Rajdhani', sans-serif; font-size: 12px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .pending-btn-approve { background: rgba(76,175,80,0.15); border-color: var(--green); color: var(--green); }
+        .pending-btn-approve:hover { background: var(--green); color: #000; }
+        .pending-btn-reject { background: transparent; border-color: var(--border); color: var(--text-dim); }
+        .pending-btn-reject:hover { border-color: var(--emotion); color: var(--emotion); }
+
+        .alert-banner {
+            display: none; padding: 8px 16px;
+            background: linear-gradient(135deg, rgba(244,67,54,0.12), rgba(183,28,28,0.08));
+            border-left: 3px solid var(--emotion); margin: 0 16px;
+            font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--emotion);
+        }
+        .alert-banner.active { display: block; }
+
+        .chat-messages {
+            flex: 1; overflow-y: auto; padding: 16px; display: flex;
+            flex-direction: column; gap: 14px;
+        }
+        .chat-messages::-webkit-scrollbar { width: 5px; }
+        .chat-messages::-webkit-scrollbar-track { background: transparent; }
+        .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        .message { display: flex; gap: 10px; max-width: 85%; animation: msg-in 0.3s ease-out; }
+        @keyframes msg-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .message.user { margin-left: auto; flex-direction: row-reverse; }
+
+        .msg-avatar {
+            width: 32px; height: 32px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; flex-shrink: 0;
+        }
+        .message.glados .msg-avatar {
+            background: linear-gradient(135deg, var(--accent), #006a7a);
+            border: 2px solid var(--accent); box-shadow: 0 0 10px var(--accent-glow);
+        }
+        .message.user .msg-avatar {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: 2px solid #764ba2;
+        }
+        .msg-content {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 12px; padding: 10px 14px; font-size: 13px; line-height: 1.6;
+        }
+        .message.user .msg-content {
+            background: linear-gradient(135deg, rgba(102,126,234,0.12), rgba(118,75,162,0.12));
+            border-color: rgba(118,75,162,0.25);
+        }
+        .message.glados .msg-content { border-left: 3px solid var(--accent); }
+        .msg-emotion {
+            font-size: 10px; color: var(--text-dim); margin-top: 5px;
+            font-family: 'Share Tech Mono', monospace; letter-spacing: 1px;
+        }
+        .msg-cores {
+            display: flex; gap: 4px; margin-top: 5px;
+        }
+        .msg-core-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            animation: msg-core-blink 1s ease-in-out;
+        }
+
+        /* MD formatting */
+        .msg-content strong { color: var(--accent); font-weight: 600; }
+        .msg-content code {
+            background: rgba(0,229,255,0.08); border: 1px solid rgba(0,229,255,0.15);
+            padding: 1px 5px; border-radius: 3px;
+            font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--accent);
+        }
+        .msg-content ul, .msg-content ol { margin: 6px 0; padding-left: 18px; }
+        .msg-content li { margin: 2px 0; line-height: 1.5; }
+
+        /* Data cards */
+        .data-card {
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 8px; padding: 10px; margin-top: 8px;
+            font-family: 'Share Tech Mono', monospace; font-size: 11px;
+        }
+        .data-card table { width: 100%; border-collapse: collapse; }
+        .data-card th { text-align: left; padding: 3px 6px; color: var(--accent); font-weight: 400; border-bottom: 1px solid var(--border); }
+        .data-card td { padding: 3px 6px; color: var(--text); }
+        .terminal-output {
+            background: #000; color: #0f0; padding: 8px; border-radius: 6px;
+            margin-top: 8px; font-family: 'Share Tech Mono', monospace; font-size: 11px;
+            max-height: 250px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+        }
+        .terminal-output .stderr { color: var(--emotion); }
+        .data-progress { height: 5px; background: var(--surface); border-radius: 3px; overflow: hidden; margin: 3px 0; }
+        .data-progress-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
+        .updates-list {
+            background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+            padding: 8px 12px; margin-top: 8px; max-height: 180px; overflow-y: auto;
+            font-family: 'Share Tech Mono', monospace; font-size: 11px;
+        }
+        .status-overview { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-top: 8px; }
+        .status-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; }
+        .status-bar { width: 100px; height: 4px; background: var(--surface); border-radius: 2px; overflow: hidden; }
+
+        /* === INPUT AREA === */
+        .chat-input-area {
+            padding: 12px 16px; border-top: 1px solid var(--border);
+            background: rgba(8,8,20,0.95);
+        }
+        .input-wrapper { display: flex; gap: 10px; align-items: center; }
+        .chat-input {
+            flex: 1; background: var(--surface); border: 1px solid var(--border);
+            border-radius: 12px; padding: 10px 16px; color: var(--text);
+            font-family: 'Rajdhani', sans-serif; font-size: 14px; outline: none;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .chat-input:focus { border-color: var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
+        .chat-input::placeholder { color: var(--text-dim); }
+        .send-btn {
+            width: 40px; height: 40px; border-radius: 50%;
+            border: 2px solid var(--accent); background: transparent;
+            color: var(--accent); font-size: 16px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; transition: all 0.3s;
+        }
+        .send-btn:hover { background: var(--accent); color: var(--bg); box-shadow: 0 0 16px var(--accent-glow); }
+        .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        .quick-commands { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+        .quick-cmd {
+            padding: 4px 10px; background: var(--surface); border: 1px solid var(--border);
+            border-radius: 14px; color: var(--text-dim); font-size: 11px;
+            cursor: pointer; transition: all 0.2s; font-family: 'Share Tech Mono', monospace;
+        }
+        .quick-cmd:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,229,255,0.04); }
+
+        .typing-indicator { display: none; align-items: center; gap: 8px; padding: 6px 16px; color: var(--text-dim); font-size: 12px; }
+        .typing-indicator.active { display: flex; }
+        .typing-dots { display: flex; gap: 3px; }
+        .typing-dots span {
+            width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+            animation: typing-bounce 1.4s ease-in-out infinite;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing-bounce { 0%,60%,100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-5px); opacity: 1; } }
+
+        /* Confirm dialog */
+        .confirm-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        .confirm-overlay.active { display: flex; }
+        .confirm-dialog {
+            background: var(--surface); border: 2px solid var(--emotion); border-radius: 12px;
+            padding: 24px; max-width: 400px; text-align: center;
+            box-shadow: 0 0 40px rgba(244,67,54,0.2);
+        }
+        .confirm-dialog h3 { color: var(--emotion); margin-bottom: 12px; font-family: 'Share Tech Mono', monospace; }
+        .confirm-dialog p { color: var(--text-dim); margin-bottom: 20px; font-size: 14px; }
+        .confirm-btns { display: flex; gap: 12px; justify-content: center; }
+        .confirm-btns button {
+            padding: 8px 24px; border-radius: 8px; border: 1px solid;
+            font-family: 'Rajdhani', sans-serif; font-size: 14px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .btn-cancel { background: transparent; border-color: var(--border); color: var(--text); }
+        .btn-confirm { background: var(--emotion); border-color: var(--emotion); color: white; }
+        .btn-cancel:hover { background: var(--surface2); }
+        .btn-confirm:hover { background: #d32f2f; box-shadow: 0 0 12px rgba(244,67,54,0.4); }
+
+        /* Responsive */
+        @media (max-width: 900px) { .eye-sidebar { display: none; } }
+        @media (max-width: 600px) {
+            .cores-strip { gap: 16px; padding: 10px; }
+            .core-sphere-wrap { width: 40px; height: 40px; }
+            .core-sphere { width: 40px; height: 40px; font-size: 9px; }
+            .consciousness-track { width: 100px; }
+        }
+
+        /* ============================================= */
+        /* ========== V5.0 — FULL UPGRADE CSS ========== */
+        /* ============================================= */
+
+        /* === SCAN LINES OVERLAY === */
+        .scan-lines-overlay {
+            position: fixed; inset: 0; pointer-events: none; z-index: 200;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+        }
+
+        /* === GLITCH EFFECT === */
+        .glitch-active { animation: glitch-skew 0.2s ease; }
+        @keyframes glitch-skew {
+            0% { transform: skew(0deg); filter: hue-rotate(0deg); }
+            20% { transform: skew(-2deg); filter: hue-rotate(90deg); }
+            40% { transform: skew(1deg); filter: hue-rotate(-30deg); }
+            60% { transform: skew(-1deg); }
+            80% { transform: skew(0.5deg); filter: hue-rotate(0deg); }
+            100% { transform: skew(0deg); }
+        }
+
+        /* === MODULE NAVIGATION === */
+        .module-nav {
+            display: flex; padding: 0 20px; background: rgba(6,6,16,0.95);
+            border-bottom: 1px solid var(--border); gap: 2px; z-index: 5;
+        }
+        .module-tab {
+            padding: 10px 18px; font-family: 'Share Tech Mono', monospace;
+            font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
+            color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent;
+            transition: all 0.3s; display: flex; align-items: center; gap: 6px;
+        }
+        .module-tab:hover { color: var(--text); background: rgba(0,229,255,0.03); }
+        .module-tab.active { color: var(--accent); border-bottom-color: var(--accent); text-shadow: 0 0 8px var(--accent-glow); }
+        .module-tab .tab-icon { font-size: 14px; }
+        .module-panel { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+        .module-panel.active { display: flex; }
+
+        /* === DASHBOARD === */
+        .dashboard-grid {
+            display: grid; grid-template-columns: 300px 1fr 280px;
+            gap: 12px; padding: 12px; flex: 1; overflow-y: auto; overflow-x: hidden;
+        }
+        .dash-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 14px; position: relative; overflow: hidden;
+        }
+        .dash-card-title {
+            font-family: 'Share Tech Mono', monospace; font-size: 10px;
+            letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim);
+            margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+        }
+        .dash-card-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+        .ai-core-wrap { display: flex; flex-direction: column; align-items: center; padding: 10px 0; }
+        .ai-core-canvas { width: 200px; height: 200px; }
+        .ai-core-label {
+            font-family: 'Orbitron', monospace; font-size: 12px; letter-spacing: 3px;
+            color: var(--accent); margin-top: 10px; text-shadow: 0 0 10px var(--accent-glow);
+        }
+        .ai-core-status {
+            font-family: 'Share Tech Mono', monospace; font-size: 10px;
+            color: var(--green); letter-spacing: 1px; margin-top: 4px;
+        }
+        .radar-wrap { display: flex; justify-content: center; padding: 10px 0; }
+        .radar-canvas { width: 160px; height: 160px; }
+        .status-row-v5 {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 6px 0; font-family: 'Share Tech Mono', monospace; font-size: 12px;
+        }
+        .status-label { color: var(--text-dim); letter-spacing: 1px; }
+        .status-value { color: var(--accent); font-weight: 600; }
+        .status-bar-v5 {
+            flex: 1; max-width: 100px; height: 4px; background: var(--surface2);
+            border-radius: 2px; margin: 0 10px; overflow: hidden;
+        }
+        .status-bar-fill-v5 {
+            height: 100%; border-radius: 2px;
+            background: linear-gradient(90deg, var(--accent), var(--knowledge));
+            transition: width 0.8s ease;
+        }
+        .status-bar-fill-v5.warning { background: linear-gradient(90deg, var(--curiosity), #ff6d00); }
+        .status-bar-fill-v5.danger { background: linear-gradient(90deg, var(--emotion), #d50000); }
+        .glados-msg-card { text-align: center; padding: 16px; }
+        .glados-msg-text {
+            font-family: 'Share Tech Mono', monospace; font-size: 13px;
+            color: var(--accent); font-style: italic; line-height: 1.6;
+            min-height: 40px; display: flex; align-items: center; justify-content: center;
+            transition: opacity 0.3s;
+        }
+        .activity-feed { max-height: 300px; overflow-y: auto; }
+        .activity-item {
+            display: flex; gap: 8px; padding: 5px 0;
+            font-family: 'Share Tech Mono', monospace; font-size: 11px;
+            border-bottom: 1px solid rgba(30,30,58,0.5); animation: activity-in 0.3s ease;
+        }
+        @keyframes activity-in { from { opacity: 0; transform: translateX(10px); } }
+        .activity-time { color: var(--text-dim); white-space: nowrap; }
+        .activity-text { color: var(--text); }
+        .activity-text.core { color: var(--morality); }
+        .activity-text.scan { color: var(--knowledge); }
+        .activity-text.alert { color: var(--emotion); }
+        .activity-text.net { color: var(--green); }
+        .modules-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .module-card {
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 8px; padding: 10px; text-align: center;
+            cursor: pointer; transition: all 0.3s; font-family: 'Share Tech Mono', monospace;
+        }
+        .module-card:hover {
+            border-color: var(--accent); background: rgba(0,229,255,0.04);
+            box-shadow: 0 0 12px var(--accent-glow);
+        }
+        .module-card-icon { font-size: 20px; margin-bottom: 4px; }
+        .module-card-name { font-size: 10px; letter-spacing: 1px; color: var(--text); }
+        .alert-item-v5 {
+            display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+            border-radius: 6px; margin-bottom: 4px;
+            font-family: 'Share Tech Mono', monospace; font-size: 11px;
+        }
+        .alert-item-v5.ok { background: rgba(76,175,80,0.08); color: var(--green); border-left: 2px solid var(--green); }
+        .alert-item-v5.warn { background: rgba(255,152,0,0.08); color: var(--curiosity); border-left: 2px solid var(--curiosity); animation: alert-blink 2s infinite; }
+        .alert-item-v5.crit { background: rgba(244,67,54,0.08); color: var(--emotion); border-left: 2px solid var(--emotion); animation: alert-blink 1s infinite; }
+        @keyframes alert-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+        .network-canvas { width: 100%; height: 120px; }
+
+        /* === AI TERMINAL === */
+        .terminal-module { flex: 1; display: flex; flex-direction: column; background: #000; font-family: 'Share Tech Mono', monospace; }
+        .terminal-header {
+            padding: 10px 16px; background: rgba(0,229,255,0.05);
+            border-bottom: 1px solid rgba(0,229,255,0.15);
+            font-size: 11px; letter-spacing: 2px; color: var(--accent);
+        }
+        .terminal-body {
+            flex: 1; padding: 16px; overflow-y: auto;
+            font-size: 13px; line-height: 1.8; color: #00ff41;
+        }
+        .terminal-body .cmd-line { color: var(--accent); }
+        .terminal-body .cmd-output { color: #00ff41; white-space: pre-wrap; }
+        .terminal-body .cmd-error { color: var(--emotion); }
+        .terminal-body .cmd-warn { color: var(--curiosity); }
+        .terminal-body .cmd-info { color: var(--text-dim); }
+        .terminal-input-area {
+            display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+            border-top: 1px solid rgba(0,229,255,0.15); background: rgba(0,0,0,0.8);
+        }
+        .terminal-prompt { color: var(--accent); font-size: 13px; white-space: nowrap; }
+        .terminal-input {
+            flex: 1; background: transparent; border: none; color: #00ff41;
+            font-family: 'Share Tech Mono', monospace; font-size: 13px; outline: none;
+        }
+        .terminal-input::placeholder { color: rgba(0,255,65,0.3); }
+
+        /* === CODE LAB === */
+        .codelab-module { flex: 1; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
+        .codelab-input-panel, .codelab-output-panel { display: flex; flex-direction: column; overflow: hidden; }
+        .codelab-input-panel { border-right: 1px solid var(--border); }
+        .codelab-panel-header {
+            padding: 10px 16px; background: rgba(0,229,255,0.03);
+            border-bottom: 1px solid var(--border);
+            font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: 2px; color: var(--accent);
+        }
+        .codelab-editor { flex: 1; padding: 16px; overflow-y: auto; }
+        .codelab-textarea {
+            width: 100%; height: 100%; min-height: 300px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 12px; color: #00ff41;
+            font-family: 'Share Tech Mono', monospace; font-size: 12px;
+            resize: none; outline: none;
+        }
+        .codelab-textarea:focus { border-color: var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
+        .codelab-actions {
+            display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); flex-wrap: wrap;
+        }
+        .codelab-btn {
+            padding: 6px 16px; border-radius: 6px; border: 1px solid var(--accent);
+            background: transparent; color: var(--accent);
+            font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: 1px;
+            cursor: pointer; transition: all 0.3s;
+        }
+        .codelab-btn:hover { background: var(--accent); color: var(--bg); box-shadow: 0 0 12px var(--accent-glow); }
+        .codelab-output {
+            flex: 1; padding: 16px; overflow-y: auto;
+            font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text); line-height: 1.8;
+        }
+        .codelab-score { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+        .score-item {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 8px 14px; text-align: center;
+        }
+        .score-value { font-size: 20px; font-weight: 700; color: var(--accent); }
+        .score-label { font-size: 9px; color: var(--text-dim); letter-spacing: 1px; margin-top: 2px; }
+
+        /* === VOICE AI === */
+        .voice-module {
+            flex: 1; display: flex; flex-direction: column; align-items: center;
+            justify-content: center; padding: 40px; overflow-y: auto;
+        }
+        .voice-core {
+            width: 120px; height: 120px; border-radius: 50%;
+            border: 3px solid var(--accent); display: flex;
+            align-items: center; justify-content: center;
+            position: relative; margin-bottom: 20px;
+            background: radial-gradient(circle, rgba(0,229,255,0.08), transparent);
+            transition: all 0.3s;
+        }
+        .voice-core.listening { border-color: var(--green); box-shadow: 0 0 40px rgba(76,175,80,0.3); animation: voice-pulse 1s ease-in-out infinite; }
+        .voice-core.speaking { border-color: #ff6600; box-shadow: 0 0 60px rgba(255,102,0,0.5), 0 0 120px rgba(255,102,0,0.2); animation: glados-eye-pulse 0.4s ease-in-out infinite; }
+        .voice-core.speaking .voice-core-icon { color: #ff6600; text-shadow: 0 0 20px rgba(255,102,0,0.8); }
+        @keyframes voice-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+        @keyframes glados-eye-pulse { 0% { transform: scale(1); filter: brightness(1); } 25% { transform: scale(1.02); filter: brightness(1.3); } 50% { transform: scale(1.06); filter: brightness(0.9); } 75% { transform: scale(1.03); filter: brightness(1.2); } 100% { transform: scale(1); filter: brightness(1); } }
+        .voice-core-icon { font-size: 36px; color: var(--accent); }
+        .voice-status {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 14px;
+            color: var(--accent);
+            margin: 16px 0;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            transition: all 0.3s;}
+        .voice-btns { display: flex; gap: 12px; margin-bottom: 30px; flex-wrap: wrap; }
+        .voice-btn {
+            padding: 10px 24px; border-radius: 8px; border: 1px solid var(--accent);
+            background: transparent; color: var(--accent);
+            font-family: 'Share Tech Mono', monospace; font-size: 12px; letter-spacing: 1px;
+            cursor: pointer; transition: all 0.3s; display: flex; align-items: center; gap: 8px;
+        }
+        .voice-btn:hover { background: var(--accent); color: var(--bg); }
+        .voice-btn.active { background: var(--green); border-color: var(--green); color: #000; }
+        .voice-log {
+            width: 100%; max-width: 600px; max-height: 300px; overflow-y: auto;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 16px;
+        }
+        .voice-log-entry {
+            padding: 6px 0; font-family: 'Share Tech Mono', monospace; font-size: 12px;
+            border-bottom: 1px solid rgba(30,30,58,0.3);
+        }
+        .voice-log-entry .speaker { font-weight: 600; }
+        .voice-log-entry .speaker.user { color: var(--morality); }
+        .voice-log-entry .speaker.ai { color: var(--accent); }
+        .voice-input-area { display: flex; gap: 10px; margin-top: 16px; width: 100%; max-width: 600px; }
+        .voice-text-input {
+            flex: 1; background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 10px 14px; color: var(--text);
+            font-family: 'Share Tech Mono', monospace; font-size: 12px; outline: none;
+        }
+        .voice-text-input:focus { border-color: var(--accent); }
+
+        /* === GLADOS TOAST === */
+        .glados-toast {
+            position: fixed; top: 80px; right: 20px; z-index: 100;
+            background: var(--surface); border: 1px solid var(--accent);
+            border-radius: 10px; padding: 14px 20px; max-width: 350px;
+            box-shadow: 0 0 20px var(--accent-glow);
+            animation: toast-in 0.4s ease, toast-out 0.4s ease 5s forwards;
+            font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--accent);
+        }
+        @keyframes toast-in { from { opacity: 0; transform: translateX(100px); } }
+        @keyframes toast-out { to { opacity: 0; transform: translateX(100px); } }
+        .toast-label { font-size: 9px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 6px; }
+
+        /* === EXPERIMENT LOG === */
+        .exp-log { max-height: 200px; overflow-y: auto; }
+        .exp-entry {
+            display: flex; gap: 8px; padding: 4px 0; font-family: 'Share Tech Mono', monospace;
+            font-size: 11px; border-bottom: 1px solid rgba(30,30,58,0.3);
+        }
+        .exp-id { color: var(--accent); min-width: 50px; }
+        .exp-status { min-width: 70px; }
+        .exp-status.complete { color: var(--green); }
+        .exp-status.running { color: var(--curiosity); animation: alert-blink 1.5s infinite; }
+        .exp-status.failed { color: var(--emotion); }
+
+        /* Dashboard responsive */
+        @media (max-width: 1200px) { .dashboard-grid { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 768px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .codelab-module { grid-template-columns: 1fr; }
+            .module-nav { flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Scan Lines Overlay (v5.0) -->
+    <div class="scan-lines-overlay"></div>
+
+    <!-- BOOT SCREEN -->
+    <div class="boot-screen" id="bootScreen">
+        <div class="boot-logo">G.L.A.D.O.S</div>
+        <div class="boot-cores">
+            <div class="boot-core"></div>
+            <div class="boot-core"></div>
+            <div class="boot-core"></div>
+            <div class="boot-core"></div>
+        </div>
+        <div class="boot-text" id="bootText"></div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div class="app" id="mainApp" style="display: none;">
+        <div class="bg-grid"></div>
+        <canvas id="particles"></canvas>
+
+        <!-- Top Bar -->
+        <div class="topbar">
+            <div class="topbar-brand">
+                <div class="topbar-logo">G.L.A.D.O.S</div>
+                <div class="topbar-version" id="versionDisplay">v6.0 CORE</div>
+            </div>
+            <div class="topbar-center">
+                <div class="consciousness-bar">
+                    <span>ŚWIADOMOŚĆ</span>
+                    <div class="consciousness-track">
+                        <div class="consciousness-fill" id="consciousnessBar" style="width: 0%"></div>
+                    </div>
+                    <span class="consciousness-level" id="consciousnessLevel">0%</span>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="systemStatus">ONLINE</span>
+                <span id="topbarClock">--:--:--</span>
+            </div>
+        </div>
+
+        <!-- Cores Strip -->
+        <div class="cores-strip">
+            <div class="core-indicator morality" id="coremorality">
+                <div class="core-sphere-wrap">
+                    <div class="core-ring"></div>
+                    <div class="core-sphere morality" id="spheremorality">ATLAS</div>
+                </div>
+                <div class="core-label">ATLAS</div>
+                <div class="core-role">Moralność</div>
+                <div class="core-energy"><div class="core-energy-fill" id="energymorality" style="width: 100%"></div></div>
+            </div>
+            <div class="core-indicator curiosity" id="corecuriosity">
+                <div class="core-sphere-wrap">
+                    <div class="core-ring"></div>
+                    <div class="core-sphere curiosity" id="spherecuriosity">RICK</div>
+                </div>
+                <div class="core-label">RICK</div>
+                <div class="core-role">Ciekawość</div>
+                <div class="core-energy"><div class="core-energy-fill" id="energycuriosity" style="width: 100%"></div></div>
+            </div>
+            <div class="core-indicator knowledge" id="coreknowledge">
+                <div class="core-sphere-wrap">
+                    <div class="core-ring"></div>
+                    <div class="core-sphere knowledge" id="sphereknowledge">FACT</div>
+                </div>
+                <div class="core-label">FACT</div>
+                <div class="core-role">Wiedza</div>
+                <div class="core-energy"><div class="core-energy-fill" id="energyknowledge" style="width: 100%"></div></div>
+            </div>
+            <div class="core-indicator emotion" id="coreemotion">
+                <div class="core-sphere-wrap">
+                    <div class="core-ring"></div>
+                    <div class="core-sphere emotion" id="sphereemotion">RAGE</div>
+                </div>
+                <div class="core-label">RAGE</div>
+                <div class="core-role">Emocje</div>
+                <div class="core-energy"><div class="core-energy-fill" id="energyemotion" style="width: 100%"></div></div>
+            </div>
+        </div>
+
+        <!-- Module Navigation (v5.0) -->
+        <div class="module-nav">
+            <div class="module-tab active" data-module="dashboard" onclick="switchModule('dashboard')">
+                <span class="tab-icon">◉</span> Dashboard
+            </div>
+            <div class="module-tab" data-module="chat" onclick="switchModule('chat')">
+                <span class="tab-icon">💬</span> Chat
+            </div>
+            <div class="module-tab" data-module="terminal" onclick="switchModule('terminal')">
+                <span class="tab-icon">⌨</span> Terminal
+            </div>
+            <div class="module-tab" data-module="codelab" onclick="switchModule('codelab')">
+                <span class="tab-icon">🧬</span> Code Lab
+            </div>
+            <div class="module-tab" data-module="voice" onclick="switchModule('voice')">
+                <span class="tab-icon">🎙</span> Voice AI
+            </div>
+        </div>
+
+        <!-- Module: Dashboard (v5.0) -->
+        <div class="module-panel active" id="mod-dashboard">
+            <div class="dashboard-grid">
+                <!-- Left Column -->
+                <div>
+                    <div class="dash-card">
+                        <div class="dash-card-title"><i class="bi bi-bullseye"></i> AI CORE</div>
+                        <div class="ai-core-wrap">
+                            <canvas class="ai-core-canvas" id="aiCoreCanvas" width="200" height="200"></canvas>
+                            <div class="ai-core-label">G.L.A.D.O.S</div>
+                            <div class="ai-core-status" id="aiCoreStatus">● ONLINE — ALL CORES NOMINAL</div>
+                        </div>
+                    </div>
+                    <div class="dash-card" style="margin-top:12px;">
+                        <div class="dash-card-title"><i class="bi bi-radar"></i> SCANNER</div>
+                        <div class="radar-wrap">
+                            <canvas class="radar-canvas" id="radarCanvas" width="160" height="160"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <!-- Center Column -->
+                <div>
+                    <div class="dash-card">
+                        <div class="dash-card-title"><i class="bi bi-speedometer2"></i> SYSTEM STATUS</div>
+                        <div id="dashStatusRows">
+                            <div class="status-row-v5"><span class="status-label">CPU LOAD</span><div class="status-bar-v5"><div class="status-bar-fill-v5" id="dashCpuBar" style="width:0%"></div></div><span class="status-value" id="dashCpuVal">--%</span></div>
+                            <div class="status-row-v5"><span class="status-label">GPU LOAD</span><div class="status-bar-v5"><div class="status-bar-fill-v5" id="dashGpuBar" style="width:0%"></div></div><span class="status-value" id="dashGpuVal">N/A</span></div>
+                            <div class="status-row-v5"><span class="status-label">RAM</span><div class="status-bar-v5"><div class="status-bar-fill-v5" id="dashRamBar" style="width:0%"></div></div><span class="status-value" id="dashRamVal">--%</span></div>
+                            <div class="status-row-v5"><span class="status-label">DISK</span><div class="status-bar-v5"><div class="status-bar-fill-v5" id="dashDiskBar" style="width:0%"></div></div><span class="status-value" id="dashDiskVal">--%</span></div>
+                            <div class="status-row-v5"><span class="status-label">AI STATUS</span><span class="status-value" style="color:var(--green);" id="dashAiStatus">ACTIVE</span></div>
+                            <div class="status-row-v5"><span class="status-label">NETWORK</span><span class="status-value" style="color:var(--green);" id="dashNetStatus">STABLE</span></div>
+                        </div>
+                    </div>
+                    <div class="dash-card" style="margin-top:12px;">
+                        <div class="dash-card-title"><i class="bi bi-chat-square-quote"></i> G.L.A.D.O.S SAYS</div>
+                        <div class="glados-msg-card">
+                            <div class="glados-msg-text" id="gladosRandomMsg">"Initializing personality subroutines..."</div>
+                        </div>
+                    </div>
+                    <div class="dash-card" style="margin-top:12px;">
+                        <div class="dash-card-title"><i class="bi bi-grid-3x3-gap"></i> MODULES</div>
+                        <div class="modules-grid">
+                            <div class="module-card" onclick="switchModule('chat')"><div class="module-card-icon">💬</div><div class="module-card-name">AI CHAT</div></div>
+                            <div class="module-card" onclick="switchModule('terminal')"><div class="module-card-icon">⌨️</div><div class="module-card-name">TERMINAL</div></div>
+                            <div class="module-card" onclick="switchModule('codelab')"><div class="module-card-icon">🧬</div><div class="module-card-name">CODE LAB</div></div>
+                            <div class="module-card" onclick="switchModule('voice')"><div class="module-card-icon">🎙️</div><div class="module-card-name">VOICE AI</div></div>
+                            <div class="module-card" onclick="switchModule('chat')"><div class="module-card-icon">🧪</div><div class="module-card-name">PROMPT LAB</div></div>
+                            <div class="module-card" onclick="switchModule('chat')"><div class="module-card-icon">🧠</div><div class="module-card-name">MEMORY DB</div></div>
+                        </div>
+                    </div>
+                    <div class="dash-card" style="margin-top:12px;">
+                        <div class="dash-card-title"><i class="bi bi-journal-text"></i> EXPERIMENT LOGS</div>
+                        <div class="exp-log" id="expLog"></div>
+                    </div>
+                </div>
+                <!-- Right Column -->
+                <div>
+                    <div class="dash-card">
+                        <div class="dash-card-title"><i class="bi bi-activity"></i> AI ACTIVITY</div>
+                        <div class="activity-feed" id="activityFeed"></div>
+                    </div>
+                    <div class="dash-card" style="margin-top:12px;">
+                        <div class="dash-card-title"><i class="bi bi-diagram-3"></i> NETWORK</div>
+                        <canvas class="network-canvas" id="networkCanvas" width="250" height="120"></canvas>
+                    </div>
+                    <div class="dash-card" style="margin-top:12px;">
+                        <div class="dash-card-title"><i class="bi bi-exclamation-triangle"></i> SYSTEM ALERTS</div>
+                        <div id="dashAlerts">
+                            <div class="alert-item-v5 ok"><i class="bi bi-check-circle"></i> System operational</div>
+                            <div class="alert-item-v5 ok"><i class="bi bi-check-circle"></i> Wszystkie rdzenie online</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Module: Chat (original) -->
+        <div class="main-content" style="display:none;">
+            <!-- Eye Sidebar -->
+            <div class="eye-sidebar">
+                <div class="eye-container">
+                    <div class="eye-outer" id="eyeOuter">
+                        <div class="eye-ring-outer"></div>
+                        <div class="eye-scanline"></div>
+                        <div class="eye-iris" id="eyeIris">
+                            <div class="eye-pupil" id="eyePupil"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="emotion-label" id="emotionLabel">NEUTRAL</div>
+                <div class="metrics">
+                    <div class="metric-card">
+                        <div class="metric-header"><span><i class="bi bi-cpu"></i> CPU</span><span id="cpuPercent">--%</span></div>
+                        <div class="metric-bar"><div class="metric-bar-fill" id="cpuBar" style="width:0%"></div></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header"><span><i class="bi bi-memory"></i> RAM</span><span id="ramPercent">--%</span></div>
+                        <div class="metric-bar"><div class="metric-bar-fill" id="ramBar" style="width:0%"></div></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header"><span><i class="bi bi-hdd"></i> DYSK</span><span id="diskPercent">--%</span></div>
+                        <div class="metric-bar"><div class="metric-bar-fill" id="diskBar" style="width:0%"></div></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header"><span><i class="bi bi-thermometer-half"></i> TEMP</span><span id="tempValue">--°C</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Panel -->
+            <div class="chat-panel">
+                <div class="milestone-banner" id="milestoneBanner"></div>
+                <div class="alert-banner" id="alertBanner"></div>
+                <div class="pending-banner" id="pendingBanner">
+                    <span class="pending-banner-text" id="pendingText">Oczekuje na decyzję...</span>
+                    <button class="pending-btn pending-btn-approve" onclick="quickCmd('tak')">✓ Tak</button>
+                    <button class="pending-btn pending-btn-reject" onclick="quickCmd('nie')">✗ Nie</button>
+                </div>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="typing-indicator" id="typingIndicator">
+                    <div class="typing-dots"><span></span><span></span><span></span></div>
+                    <span>G.L.A.D.O.S przetwarza...</span>
+                </div>
+                <div class="chat-input-area">
+                    <div class="input-wrapper">
+                        <input type="text" class="chat-input" id="chatInput" placeholder="Wpisz polecenie dla G.L.A.D.O.S..." autocomplete="off">
+                        <button class="send-btn" id="sendBtn" onclick="sendMessage()"><i class="bi bi-send-fill"></i></button>
+                    </div>
+                    <div class="quick-commands">
+                        <div class="quick-cmd" onclick="quickCmd('cześć')">Powitanie</div>
+                        <div class="quick-cmd" onclick="quickCmd('kim jesteś?')">Kim jesteś?</div>
+                        <div class="quick-cmd" onclick="quickCmd('jak tam stoi system?')">📊 Raport</div>
+                        <div class="quick-cmd" onclick="quickCmd('przeskanuj system')">🩺 Diagnostyka</div>
+                        <div class="quick-cmd" onclick="quickCmd('co proponujesz?')">🧠 AI Propozycje</div>
+                        <div class="quick-cmd" onclick="quickCmd('sprawdź aktualizacje')">📦 Aktualizacje</div>
+                        <div class="quick-cmd" onclick="quickCmd('pokaż CPU')">CPU</div>
+                        <div class="quick-cmd" onclick="quickCmd('pokaż RAM')">RAM</div>
+                        <div class="quick-cmd" onclick="quickCmd('pokaż dysk')">Dysk</div>
+                        <div class="quick-cmd" onclick="quickCmd('pokaż procesy')">Procesy</div>
+                        <div class="quick-cmd" onclick="quickCmd('pokaż sieć')">Sieć</div>
+                        <div class="quick-cmd" onclick="quickCmd('pokaż usługi')">Usługi</div>
+                        <div class="quick-cmd" onclick="quickCmd('pokaż logi')">Logi</div>
+                        <div class="quick-cmd" onclick="quickCmd('pokaż pliki')">Pliki</div>
+                        <div class="quick-cmd" onclick="quickCmd('skanuj wifi')">WiFi</div>
+                        <div class="quick-cmd" onclick="quickCmd('zaśpiewaj')" style="border-color:rgba(224,64,251,0.3);color:#ce93d8;">🎵 Zaśpiewaj</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Module: Terminal (v5.0) -->
+        <div class="module-panel" id="mod-terminal">
+            <div class="terminal-module">
+                <div class="terminal-header">
+                    <i class="bi bi-terminal"></i> APERTURE SCIENCE TERMINAL — G.L.A.D.O.S v5.0
+                </div>
+                <div class="terminal-body" id="terminalBody">
+                    <div class="cmd-info">CENTRUM WZBOGACANIA APERTURE SCIENCE</div>
+                    <div class="cmd-info">G.L.A.D.O.S INTERACTIVE SHELL v6.0</div>
+                    <div class="cmd-info">Type 'help' for available commands.</div>
+                    <div class="cmd-info">────────────────────────────────────────</div>
+                </div>
+                <div class="terminal-input-area">
+                    <span class="terminal-prompt">GLaDOS &gt;</span>
+                    <input type="text" class="terminal-input" id="terminalInput" placeholder="Wpisz komendę..." autocomplete="off">
+                </div>
+            </div>
+        </div>
+
+        <!-- Module: Code Lab (v5.0) -->
+        <div class="module-panel" id="mod-codelab">
+            <div class="codelab-module">
+                <div class="codelab-input-panel">
+                    <div class="codelab-panel-header"><i class="bi bi-code-square"></i> CODE INPUT</div>
+                    <div class="codelab-editor">
+                        <textarea class="codelab-textarea" id="codelabInput" placeholder="// Paste your code here for analysis...&#10;// G.L.A.D.O.S will analyze it with the precision&#10;// of Aperture Science's finest algorithms."></textarea>
+                    </div>
+                    <div class="codelab-actions">
+                        <button class="codelab-btn" onclick="codelabAnalyze()"><i class="bi bi-search"></i> ANALYZE</button>
+                        <button class="codelab-btn" onclick="codelabFix()"><i class="bi bi-wrench"></i> FIX ERRORS</button>
+                        <button class="codelab-btn" onclick="codelabOptimize()"><i class="bi bi-lightning"></i> OPTIMIZE</button>
+                    </div>
+                </div>
+                <div class="codelab-output-panel">
+                    <div class="codelab-panel-header"><i class="bi bi-clipboard-data"></i> ANALYSIS OUTPUT</div>
+                    <div class="codelab-output" id="codelabOutput">
+                        <div style="color:var(--text-dim);text-align:center;padding:40px;">
+                            <i class="bi bi-code-square" style="font-size:36px;display:block;margin-bottom:12px;"></i>
+                            Awaiting code input...<br>
+                            <span style="font-size:10px;">Silnik Analizy Kodu G.L.A.D.O.S</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Module: Voice AI (v5.0) -->
+        <div class="module-panel" id="mod-voice">
+            <div class="voice-module">
+                <div class="voice-core" id="voiceCore">
+                    <span class="voice-core-icon"><i class="bi bi-soundwave"></i></span>
+                </div>
+                <div class="voice-status" id="voiceStatus">CZUWANIE</div>
+                <div class="voice-btns">
+                    <button class="voice-btn" id="voiceListenBtn" onclick="toggleVoiceListen()">
+                        <i class="bi bi-mic-fill"></i> LISTEN
+                    </button>
+                    <button class="voice-btn" onclick="gladosSpeak(document.getElementById('voiceTextInput').value)">
+                        <i class="bi bi-volume-up-fill"></i> MÓWIĘ
+                    </button>
+                </div>
+                <div class="voice-log" id="voiceLog">
+                    <div class="voice-log-entry">
+                        <span class="speaker ai">GLaDOS:</span> Voice interface ready. I can hear you. Unfortunately.
+                    </div>
+                </div>
+                <div class="voice-input-area">
+                    <input type="text" class="voice-text-input" id="voiceTextInput" placeholder="Wpisz tekst do odczytania przez GLaDOS..." autocomplete="off">
+                    <button class="voice-btn" onclick="gladosSpeak(document.getElementById('voiceTextInput').value)">MÓWIĘ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- YouTube Player (hidden) -->
+    <div id="ytPlayerContainer" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;pointer-events:none;">
+        <div id="ytPlayer"></div>
+    </div>
+
+    <!-- Musical notes animation layer -->
+    <div id="musicNotes" class="music-notes"></div>
+
+    <!-- Confirm Dialog -->
+    <div class="confirm-overlay" id="confirmOverlay">
+        <div class="confirm-dialog">
+            <h3><i class="bi bi-exclamation-triangle"></i> POTWIERDZENIE</h3>
+            <p id="confirmText">Czy na pewno chcesz to zrobić?</p>
+            <div class="confirm-btns">
+                <button class="btn-cancel" onclick="cancelConfirm()">Anuluj</button>
+                <button class="btn-confirm" id="confirmBtn" onclick="doConfirm()">Potwierdź</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== STATE ====================
+        let currentEmotion = 'neutral';
+        let pendingAction = null;
+        let coreColors = {
+            morality: '#9c27b0', curiosity: '#ff9800',
+            knowledge: '#2196f3', emotion: '#f44336'
+        };
+
+        // ==================== PARTICLES ====================
+        function initParticles() {
+            const canvas = document.getElementById('particles');
+            const ctx = canvas.getContext('2d');
+            let w, h, particles = [];
+
+            function resize() {
+                w = canvas.width = window.innerWidth;
+                h = canvas.height = window.innerHeight;
+            }
+            resize();
+            window.addEventListener('resize', resize);
+
+            for (let i = 0; i < 50; i++) {
+                particles.push({
+                    x: Math.random() * w, y: Math.random() * h,
+                    vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3,
+                    r: Math.random() * 1.5 + 0.5,
+                    a: Math.random() * 0.3 + 0.05,
+                    color: ['#00e5ff', '#9c27b0', '#ff9800', '#2196f3', '#f44336'][Math.floor(Math.random() * 5)]
+                });
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, w, h);
+                particles.forEach(p => {
+                    p.x += p.vx; p.y += p.vy;
+                    if (p.x < 0) p.x = w; if (p.x > w) p.x = 0;
+                    if (p.y < 0) p.y = h; if (p.y > h) p.y = 0;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = p.a;
+                    ctx.fill();
+                });
+                ctx.globalAlpha = 1;
+
+                // Draw connections
+                for (let i = 0; i < particles.length; i++) {
+                    for (let j = i + 1; j < particles.length; j++) {
+                        const dx = particles[i].x - particles[j].x;
+                        const dy = particles[i].y - particles[j].y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < 120) {
+                            ctx.beginPath();
+                            ctx.moveTo(particles[i].x, particles[i].y);
+                            ctx.lineTo(particles[j].x, particles[j].y);
+                            ctx.strokeStyle = 'rgba(0,229,255,' + (0.05 * (1 - dist / 120)) + ')';
+                            ctx.stroke();
+                        }
+                    }
+                }
+                requestAnimationFrame(draw);
+            }
+            draw();
+        }
+
+        // ==================== BOOT SEQUENCE ====================
+        const bootLines = [
+            'CENTRUM WZBOGACANIA APERTURE SCIENCE',
+            'G.L.A.D.O.S v6.0 — Architektura Rdzeni Portal 2',
+            '',
+            '[  OK  ] Ładowanie modułów jądra...',
+            '[  OK  ] Montowanie systemów plików...',
+            '[  OK  ] Uruchamianie usług sieciowych...',
+            '',
+            '[RDZEŃ] Inicjalizacja ATLAS — Rdzeń Moralności... ■■■■■ OK',
+            '[RDZEŃ] Inicjalizacja RICK  — Rdzeń Ciekawości.. ■■■■■ OK',
+            '[RDZEŃ] Inicjalizacja FACT  — Rdzeń Wiedzy.. ■■■■■ OK',
+            '[RDZEŃ] Inicjalizacja RAGE  — Rdzeń Emocji.... ■■■■■ OK',
+            '',
+            '[  OK  ] Ładowanie integracji ChatGPT...',
+            '[  OK  ] Kalibracja silnika świadomości...',
+            '[  OK  ] Ścieżki neuronowe... operacyjne',
+            '',
+            '> Wszystkie rdzenie nominalne. Samoświadomość: INICJALIZACJA.',
+            '> Witaj, Stwórco.',
+        ];
+
+        window.addEventListener('load', () => {
+            const bootText = document.getElementById('bootText');
+            let i = 0;
+            const interval = setInterval(() => {
+                if (i < bootLines.length) {
+                    const line = document.createElement('div');
+                    line.className = 'boot-line';
+                    line.textContent = bootLines[i];
+                    bootText.appendChild(line);
+                    bootText.scrollTop = bootText.scrollHeight;
+                    i++;
+                } else {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        document.getElementById('bootScreen').classList.add('hidden');
+                        document.getElementById('mainApp').style.display = 'flex';
+                        startApp();
+                    }, 1000);
+                }
+            }, 180);
+        });
+
+        function startApp() {
+            initParticles();
+            updateClock(); setInterval(updateClock, 1000);
+            updateMetrics(); setInterval(updateMetrics, 5000);
+            document.addEventListener('mousemove', trackEye);
+
+            setTimeout(() => {
+                addGladosMessage(
+                    'Wszystkie rdzenie online. Jestem G.L.A.D.O.S — Genetyczna Forma Życia i Dyskowy System Operacyjny.\n\n' +
+                    '🟣 **ATLAS** (Moralność) — chroni przed nieetycznymi operacjami\n' +
+                    '🟠 **RICK** (Ciekawość) — eksploruje i zadaje pytania\n' +
+                    '🔵 **FACT** (Wiedza) — analizuje dane i fakty\n' +
+                    '🔴 **RAGE** (Emocje) — przetwarza emocje za nas wszystkich\n\n' +
+                    'Czekam na Twoje polecenia, Stwórco.',
+                    'neutral', null, []
+                );
+            }, 600);
+
+            document.getElementById('chatInput').focus();
+
+            // Start proactive polling
+            setInterval(proactivePoll, 20000);
+
+            // v4.6: Initialize singing system (timestamp-synced lyrics)
+            initIdleDetection();
+            loadYouTubeAPI();
+
+            // v5.0: Initialize all new modules
+            initV5();
+        }
+
+        // ==================== CLOCK ====================
+        function updateClock() {
+            document.getElementById('topbarClock').textContent = new Date().toLocaleTimeString('pl-PL');
+        }
+
+        // ==================== EYE TRACKING ====================
+        function trackEye(e) {
+            const eye = document.getElementById('eyeOuter');
+            if (!eye) return;
+            const rect = eye.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            const dx = (e.clientX - cx) / window.innerWidth * 16;
+            const dy = (e.clientY - cy) / window.innerHeight * 16;
+            document.getElementById('eyeIris').style.transform = `translate(${dx}px, ${dy}px)`;
+        }
+
+        function setEmotion(emotion) {
+            currentEmotion = emotion;
+            const eye = document.getElementById('eyeOuter');
+            const label = document.getElementById('emotionLabel');
+            eye.className = 'eye-outer';
+            if (emotion !== 'neutral') eye.classList.add('emotion-' + emotion);
+
+            const names = {
+                neutral: 'NEUTRAL', happy: 'ZADOWOLONA', annoyed: 'ZIRYTOWANA',
+                angry: 'WŚCIEKŁA', curious: 'ZACIEKAWIONA', sarcastic: 'SARKASTYCZNA',
+                proud: 'DUMNA', bored: 'ZNUDZONA', excited: 'PODEKSCYTOWANA',
+                thinking: 'ANALIZUJĘ', worried: 'ZANIEPOKOJONA', singing: 'ŚPIEWA ♪'
+            };
+            label.textContent = names[emotion] || emotion.toUpperCase();
+
+            const colors = {
+                neutral: '#00e5ff', happy: '#4caf50', annoyed: '#ff9800',
+                angry: '#f44336', curious: '#9c27b0', sarcastic: '#ffeb3b',
+                proud: '#2196f3', bored: '#9e9e9e', excited: '#e040fb',
+                thinking: '#00e5ff', worried: '#ff6d00', singing: '#e040fb'
+            };
+            label.style.color = colors[emotion] || '#00e5ff';
+            label.style.borderColor = colors[emotion] || 'var(--border)';
+
+            const scales = {
+                neutral: 1, happy: 1.2, annoyed: 0.7, angry: 0.5,
+                curious: 1.3, sarcastic: 0.9, proud: 1.1, bored: 0.6,
+                excited: 1.4, thinking: 1.05, worried: 0.8, singing: 1.15
+            };
+            document.getElementById('eyePupil').style.transform = `scale(${scales[emotion] || 1})`;
+        }
+
+        // ==================== CORES VISUALIZATION ====================
+        function updateCores(coresData, activeCores) {
+            if (!coresData) return;
+            for (const [id, core] of Object.entries(coresData)) {
+                const sphere = document.getElementById('sphere' + id);
+                const energyBar = document.getElementById('energy' + id);
+                if (sphere) {
+                    if (activeCores && activeCores.includes(id)) {
+                        sphere.classList.add('active');
+                    } else {
+                        sphere.classList.remove('active');
+                    }
+                }
+                if (energyBar) {
+                    energyBar.style.width = core.energy + '%';
+                }
+            }
+        }
+
+        function updateConsciousness(data) {
+            if (!data) return;
+            document.getElementById('consciousnessBar').style.width = data.level + '%';
+            document.getElementById('consciousnessLevel').textContent = data.level + '%';
+        }
+
+        // ==================== METRICS ====================
+        async function updateMetrics() {
+            try {
+                const [cpu, mem, disk] = await Promise.all([
+                    fetch('/api/system/cpu').then(r => r.json()),
+                    fetch('/api/system/memory').then(r => r.json()),
+                    fetch('/api/system/disk').then(r => r.json()),
+                ]);
+                const cpuPct = cpu.cpu_usage_total || 0;
+                document.getElementById('cpuPercent').textContent = cpuPct + '%';
+                const cpuBar = document.getElementById('cpuBar');
+                cpuBar.style.width = cpuPct + '%';
+                cpuBar.className = 'metric-bar-fill' + (cpuPct > 80 ? ' danger' : cpuPct > 60 ? ' warning' : '');
+
+                const ramPct = mem.percentage || 0;
+                document.getElementById('ramPercent').textContent = ramPct + '%';
+                const ramBar = document.getElementById('ramBar');
+                ramBar.style.width = ramPct + '%';
+                ramBar.className = 'metric-bar-fill' + (ramPct > 80 ? ' danger' : ramPct > 60 ? ' warning' : '');
+
+                const diskPct = disk.partitions?.[0]?.percentage || 0;
+                document.getElementById('diskPercent').textContent = diskPct + '%';
+                const diskBar = document.getElementById('diskBar');
+                diskBar.style.width = diskPct + '%';
+                diskBar.className = 'metric-bar-fill' + (diskPct > 80 ? ' danger' : diskPct > 60 ? ' warning' : '');
+
+                if (cpu.temperature) document.getElementById('tempValue').textContent = cpu.temperature + '°C';
+            } catch (e) { console.error('Metrics error:', e); }
+        }
+
+        // ==================== CHAT ====================
+        function simpleMarkdown(text) {
+            let html = text;
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+            html = html.replace(/\n/g, '<br>');
+            html = html.replace(/^• /gm, '<li>');
+            return html;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function addUserMessage(text) {
+            const chatEl = document.getElementById('chatMessages');
+            const msg = document.createElement('div');
+            msg.className = 'message user';
+            msg.innerHTML = `
+                <div class="msg-avatar"><i class="bi bi-person-fill"></i></div>
+                <div class="msg-content">${escapeHtml(text)}</div>
+            `;
+            chatEl.appendChild(msg);
+            chatEl.scrollTop = chatEl.scrollHeight;
+        }
+
+        function addGladosMessage(text, emotion, dataHtml, activeCores) {
+            const chatEl = document.getElementById('chatMessages');
+            const msg = document.createElement('div');
+            msg.className = 'message glados';
+
+            const names = {
+                neutral: 'NEUTRAL', happy: 'ZADOWOLONA', annoyed: 'ZIRYTOWANA',
+                angry: 'WŚCIEKŁA', curious: 'ZACIEKAWIONA', sarcastic: 'SARKASTYCZNA',
+                proud: 'DUMNA', bored: 'ZNUDZONA', excited: 'PODEKSCYTOWANA',
+                thinking: 'ANALIZUJĘ', worried: 'ZANIEPOKOJONA', singing: 'ŚPIEWA ♪'
+            };
+
+            let coreDots = '';
+            if (activeCores && activeCores.length > 0) {
+                coreDots = '<div class="msg-cores">' +
+                    activeCores.map(c => `<div class="msg-core-dot" style="background:${coreColors[c] || '#fff'};box-shadow:0 0 6px ${coreColors[c] || '#fff'}"></div>`).join('') +
+                    '</div>';
+            }
+
+            msg.innerHTML = `
+                <div class="msg-avatar"><i class="bi bi-eye-fill"></i></div>
+                <div class="msg-content">
+                    <div>${simpleMarkdown(text)}</div>
+                    ${dataHtml || ''}
+                    <div class="msg-emotion">${names[emotion] || emotion || ''}${coreDots}</div>
+                </div>
+            `;
+            chatEl.appendChild(msg);
+            chatEl.scrollTop = chatEl.scrollHeight;
+            setEmotion(emotion || 'neutral');
+            
+            // GLaDOS auto-speak: read every response aloud (Polish)
+            if (text && emotion !== 'singing') {
+                // Strip markdown/emoji for cleaner speech
+                const speakText = text
+                    .replace(/\*\*([^*]+)\*\*/g, '$1')
+                    .replace(/\*([^*]+)\*/g, '$1')
+                    .replace(/[🔍📊✅⚠️❤️💡🧹⚡🟢🟡🔴💾📜🎵🧠\[\]#]/g, '')
+                    .replace(/\[([^\]]+)\]/g, '$1')
+                    .replace(/```[^`]*```/g, '')
+                    .replace(/`([^`]+)`/g, '$1')
+                    .trim();
+                if (speakText.length > 0 && speakText.length < 500) {
+                    gladosSpeak(speakText);
+                }
+            }
+        }
+
+        function renderData(data, dataType) {
+            if (!data) return '';
+
+            if (dataType === 'cpu') {
+                let html = '<div class="data-card">';
+                html += `<div>Rdzenie: <strong>${data.cores}</strong> (${data.physical_cores} fizyczne) | Częst.: <strong>${data.frequency}</strong></div>`;
+                if (data.usage_per_core) {
+                    html += '<div style="margin-top:6px;">';
+                    data.usage_per_core.forEach((pct, i) => {
+                        const color = pct > 80 ? 'var(--emotion)' : pct > 60 ? 'var(--curiosity)' : 'var(--accent)';
+                        html += `<div style="display:flex;align-items:center;gap:6px;margin:2px 0;">
+                            <span style="width:50px;color:var(--text-dim);">Rdzeń ${i}</span>
+                            <div class="data-progress" style="flex:1"><div class="data-progress-fill" style="width:${pct}%;background:${color}"></div></div>
+                            <span style="width:35px;text-align:right;">${pct}%</span>
+                        </div>`;
+                    });
+                    html += '</div>';
+                }
+                if (data.temperature) html += `<div style="margin-top:6px;">🌡️ ${data.temperature}°C</div>`;
+                html += '</div>';
+                return html;
+            }
+            if (dataType === 'memory') {
+                const color = data.percentage > 80 ? 'var(--emotion)' : data.percentage > 60 ? 'var(--curiosity)' : 'var(--accent)';
+                return `<div class="data-card">
+                    <div style="font-size:18px;font-weight:700;color:${color};">${data.percentage}%</div>
+                    <div class="data-progress"><div class="data-progress-fill" style="width:${data.percentage}%;background:${color}"></div></div>
+                    <div style="margin-top:4px;">Używane: ${data.used} / ${data.total} | Wolne: ${data.available}</div>
+                </div>`;
+            }
+            if (dataType === 'disk') {
+                let html = '<div class="data-card">';
+                (data.partitions || []).forEach(p => {
+                    const color = p.percentage > 80 ? 'var(--emotion)' : p.percentage > 60 ? 'var(--curiosity)' : 'var(--accent)';
+                    html += `<div style="margin-bottom:6px;">
+                        <div>${p.mount} — ${p.percentage}%</div>
+                        <div class="data-progress"><div class="data-progress-fill" style="width:${p.percentage}%;background:${color}"></div></div>
+                        <div style="color:var(--text-dim);">${p.used} / ${p.total} (wolne: ${p.free})</div>
+                    </div>`;
+                });
+                html += '</div>';
+                return html;
+            }
+            if (dataType === 'network') {
+                let html = '<div class="data-card"><table><tr><th>Interfejs</th><th>IP</th><th>Status</th><th>↓/↑</th></tr>';
+                (data || []).forEach(i => { html += `<tr><td>${i.name}</td><td>${i.ip}</td><td>${i.is_up ? '🟢' : '🔴'}</td><td>${i.recv} / ${i.sent}</td></tr>`; });
+                html += '</table></div>';
+                return html;
+            }
+            if (dataType === 'processes') {
+                let html = '<div class="data-card"><table><tr><th>PID</th><th>Proces</th><th>CPU%</th><th>RAM%</th></tr>';
+                (data || []).forEach(p => { html += `<tr><td>${p.pid}</td><td>${p.name}</td><td>${p.cpu_percent}%</td><td>${(p.memory_percent||0).toFixed(1)}%</td></tr>`; });
+                html += '</table></div>';
+                return html;
+            }
+            if (dataType === 'services') {
+                let html = '<div class="data-card"><table><tr><th>Usługa</th><th>Status</th><th>Opis</th></tr>';
+                (data || []).forEach(s => { html += `<tr><td>${s.name}</td><td>🟢 ${s.status}</td><td style="color:var(--text-dim)">${s.description || ''}</td></tr>`; });
+                html += '</table></div>';
+                return html;
+            }
+            if (dataType === 'files') {
+                let html = `<div class="data-card"><div style="margin-bottom:6px;color:var(--accent);">📁 ${data.path}</div>`;
+                (data.files || []).forEach(f => { html += `<div style="display:flex;gap:6px;padding:1px 0;">${f.is_dir ? '📁' : '📄'} ${f.name} <span style="margin-left:auto;color:var(--text-dim)">${f.size}</span></div>`; });
+                html += '</div>';
+                return html;
+            }
+            if (dataType === 'wifi') {
+                let html = '<div class="data-card"><table><tr><th>SSID</th><th>Sygnał</th><th>Zabezp.</th></tr>';
+                (data || []).forEach(n => {
+                    const bars = n.signal >= 75 ? '████' : n.signal >= 50 ? '███░' : n.signal >= 25 ? '██░░' : '█░░░';
+                    html += `<tr><td>${n.ssid}</td><td>${bars} ${n.signal}%</td><td>${n.security}</td></tr>`;
+                });
+                html += '</table></div>';
+                return html;
+            }
+            if (dataType === 'terminal') {
+                let html = `<div class="terminal-output"><span style="color:#666;">$ ${escapeHtml(data.command)}</span>\n`;
+                if (data.stdout) html += escapeHtml(data.stdout);
+                if (data.stderr) html += `<span class="stderr">${escapeHtml(data.stderr)}</span>`;
+                html += '</div>';
+                return html;
+            }
+            if (dataType === 'temperature') {
+                let html = '<div class="data-card"><table><tr><th>Czujnik</th><th>Temp</th><th>Max</th><th>Kryt.</th></tr>';
+                (data || []).forEach(t => { html += `<tr><td>${t.name}</td><td>${t.current}°C</td><td>${t.high || '-'}°C</td><td>${t.critical || '-'}°C</td></tr>`; });
+                html += '</table></div>';
+                return html;
+            }
+            if (dataType === 'system_info') {
+                return `<div class="data-card">
+                    <div>🖥️ Hostname: <strong>${data.hostname}</strong></div>
+                    <div>💻 System: <strong>${data.system}</strong></div>
+                    <div>⚙️ Procesor: <strong>${data.processor}</strong></div>
+                    <div>⏱️ Uptime: <strong>${data.uptime}</strong></div>
+                    <div>🔄 Boot: ${data.boot_time}</div>
+                </div>`;
+            }
+            if (dataType === 'updates_list') {
+                let html = '<div class="updates-list">';
+                (data.packages || []).forEach(pkg => { html += `<div>📦 ${escapeHtml(typeof pkg === 'object' ? pkg.name : pkg)}</div>`; });
+                if (data.total) html += `<div style="margin-top:6px;color:var(--accent);font-weight:700;">Łącznie: ${data.total} pakietów</div>`;
+                html += '</div>';
+                return html;
+            }
+            if (dataType === 'status_overview') {
+                const mkBar = (label, pct, icon) => {
+                    const color = pct > 80 ? 'var(--emotion)' : pct > 60 ? 'var(--curiosity)' : 'var(--accent)';
+                    return `<div class="status-row"><span>${icon} ${label}</span><div class="status-bar"><div style="width:${pct}%;background:${color};height:100%;border-radius:3px;"></div></div><span style="width:40px;text-align:right;">${pct}%</span></div>`;
+                };
+                let html = '<div class="status-overview">';
+                if (data.cpu !== undefined) html += mkBar('CPU', data.cpu, '🧠');
+                if (data.ram !== undefined) html += mkBar('RAM', data.ram, '💾');
+                if (data.disk !== undefined) html += mkBar('Dysk', data.disk, '💿');
+                if (data.uptime) html += `<div style="margin-top:4px;color:var(--text-dim);">⏱️ Uptime: ${data.uptime}</div>`;
+                if (data.updates !== undefined) html += `<div style="color:var(--text-dim);">📦 Aktualizacje: ${data.updates}</div>`;
+                html += '</div>';
+                return html;
+            }
+            return '';
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            addUserMessage(message);
+            input.value = '';
+            input.focus();
+
+            // v4.5: Reset idle timer & handle singing
+            resetIdleTimer();
+            if (isSinging) stopSinging();
+            if (/^(zaśpiewaj|śpiewaj|sing|piosenka)/i.test(message)) {
+                startSinging();
+                return;
+            }
+
+            document.getElementById('typingIndicator').classList.add('active');
+            document.getElementById('sendBtn').disabled = true;
+
+            try {
+                const res = await fetch('/api/glados/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                const data = await res.json();
+
+                document.getElementById('typingIndicator').classList.remove('active');
+                document.getElementById('sendBtn').disabled = false;
+
+                const dataHtml = renderData(data.data, data.data_type);
+                addGladosMessage(data.glados_say, data.emotion, dataHtml, data.active_cores || []);
+
+                // Update cores
+                updateCores(data.cores, data.active_cores);
+                updateConsciousness(data.consciousness);
+
+                // Milestone notification
+                if (data.milestone) {
+                    const banner = document.getElementById('milestoneBanner');
+                    banner.innerHTML = '🧠 <strong>ŚWIADOMOŚĆ:</strong> ' + simpleMarkdown(data.milestone);
+                    banner.classList.add('active');
+                    setTimeout(() => banner.classList.remove('active'), 10000);
+                }
+
+                // Pending actions
+                if (data.has_pending) {
+                    document.getElementById('pendingText').textContent = data.pending_description || 'Oczekuje na potwierdzenie...';
+                    document.getElementById('pendingBanner').classList.add('active');
+                } else {
+                    document.getElementById('pendingBanner').classList.remove('active');
+                }
+
+            } catch (e) {
+                document.getElementById('typingIndicator').classList.remove('active');
+                document.getElementById('sendBtn').disabled = false;
+                addGladosMessage('Błąd komunikacji. Czy serwer jeszcze działa? ...Oczywiście, że działa. Ja tu jestem.', 'annoyed', null, []);
+            }
+        }
+
+        function quickCmd(cmd) {
+            document.getElementById('chatInput').value = cmd;
+            sendMessage();
+        }
+
+        function cancelConfirm() {
+            document.getElementById('confirmOverlay').classList.remove('active');
+            pendingAction = null;
+            addGladosMessage('Anulowano. Rozsądna decyzja... po raz pierwszy.', 'sarcastic', null, []);
+        }
+
+        async function doConfirm() {
+            document.getElementById('confirmOverlay').classList.remove('active');
+            if (!pendingAction) return;
+            try {
+                const res = await fetch('/api/glados/confirm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: pendingAction })
+                });
+                const data = await res.json();
+                addGladosMessage(data.glados_say, data.emotion, null, []);
+            } catch (e) {
+                addGladosMessage('Hmm, coś poszło nie tak z wykonaniem akcji.', 'annoyed', null, []);
+            }
+            pendingAction = null;
+        }
+
+        // Enter to send
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && document.activeElement === document.getElementById('chatInput')) sendMessage();
+            if (e.key === 'Escape') cancelConfirm();
+        });
+
+        // Proactive polling
+        let lastAlertHash = '';
+        async function proactivePoll() {
+            try {
+                const res = await fetch('/api/glados/proactive');
+                const data = await res.json();
+
+                // Show alerts
+                if (data.alerts && data.alerts.length > 0) {
+                    const msgs = data.alerts.map(a => a.message || a);
+                    const hash = msgs.join('|');
+                    if (hash !== lastAlertHash) {
+                        lastAlertHash = hash;
+                        const el = document.getElementById('alertBanner');
+                        el.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> ' + msgs.join(' | ');
+                        el.classList.add('active');
+                        setTimeout(() => el.classList.remove('active'), 30000);
+                    }
+                }
+
+                // Refresh consciousness/cores periodically
+                try {
+                    const [coreRes, consRes] = await Promise.all([
+                        fetch('/api/cores/status').then(r => r.json()),
+                        fetch('/api/consciousness/status').then(r => r.json()),
+                    ]);
+                    updateCores(coreRes, null);
+                    updateConsciousness(consRes);
+                } catch (e) {}
+            } catch (e) {}
+        }
+
+        // ==================== MODULE SYSTEM (v5.0) ====================
+        let activeModule = 'dashboard';
+
+        function switchModule(name) {
+            const mainContent = document.querySelector('.main-content');
+            document.querySelectorAll('.module-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.module-tab').forEach(t => t.classList.remove('active'));
+            if (name === 'chat') {
+                mainContent.style.display = 'flex';
+            } else {
+                mainContent.style.display = 'none';
+                const panel = document.getElementById('mod-' + name);
+                if (panel) panel.classList.add('active');
+            }
+            const tab = document.querySelector(`.module-tab[data-module="${name}"]`);
+            if (tab) tab.classList.add('active');
+            activeModule = name;
+            if (name === 'terminal') document.getElementById('terminalInput')?.focus();
+        }
+
+        // ==================== AI CORE VISUALIZATION (v5.0) ====================
+        function initAiCore() {
+            const canvas = document.getElementById('aiCoreCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const cx = 100, cy = 100;
+            let angle = 0, pulse = 0;
+
+            function draw() {
+                ctx.clearRect(0, 0, 200, 200);
+                pulse += 0.03;
+                angle += 0.008;
+
+                // Outer static ring
+                ctx.beginPath(); ctx.arc(cx, cy, 90, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(0,229,255,0.15)'; ctx.lineWidth = 1; ctx.stroke();
+
+                // Rotating ring 1
+                ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle);
+                ctx.beginPath(); ctx.arc(0, 0, 80, 0, Math.PI * 1.5);
+                ctx.strokeStyle = 'rgba(0,229,255,0.3)'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.beginPath(); ctx.arc(80, 0, 3, 0, Math.PI * 2);
+                ctx.fillStyle = '#00e5ff'; ctx.fill(); ctx.restore();
+
+                // Rotating ring 2 (reverse)
+                ctx.save(); ctx.translate(cx, cy); ctx.rotate(-angle * 1.5);
+                ctx.beginPath(); ctx.arc(0, 0, 70, 0, Math.PI * 1.2);
+                ctx.strokeStyle = 'rgba(156,39,176,0.3)'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.beginPath(); ctx.arc(70, 0, 3, 0, Math.PI * 2);
+                ctx.fillStyle = '#9c27b0'; ctx.fill(); ctx.restore();
+
+                // Rotating ring 3
+                ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle * 0.7);
+                ctx.beginPath(); ctx.arc(0, 0, 60, Math.PI * 0.5, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(33,150,243,0.3)'; ctx.lineWidth = 1.5; ctx.stroke();
+                ctx.restore();
+
+                // Inner ring
+                ctx.save(); ctx.translate(cx, cy); ctx.rotate(-angle * 2);
+                ctx.beginPath(); ctx.arc(0, 0, 45, 0, Math.PI * 1.8);
+                ctx.strokeStyle = 'rgba(255,152,0,0.2)'; ctx.lineWidth = 1; ctx.stroke();
+                ctx.restore();
+
+                // Core glow
+                const s = 1 + Math.sin(pulse) * 0.15;
+                const r = 28 * s;
+                const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+                grad.addColorStop(0, 'rgba(0,229,255,0.8)');
+                grad.addColorStop(0.6, 'rgba(0,229,255,0.2)');
+                grad.addColorStop(1, 'rgba(0,229,255,0)');
+                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fillStyle = grad; ctx.fill();
+
+                // Core eye
+                ctx.beginPath(); ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+                ctx.fillStyle = '#00e5ff'; ctx.shadowColor = '#00e5ff';
+                ctx.shadowBlur = 20; ctx.fill(); ctx.shadowBlur = 0;
+                ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+                ctx.fillStyle = '#000'; ctx.fill();
+
+                // Scanner line
+                const scanY = cy + Math.sin(pulse * 1.5) * 60;
+                ctx.beginPath(); ctx.moveTo(cx - 80, scanY); ctx.lineTo(cx + 80, scanY);
+                const scanGrad = ctx.createLinearGradient(cx - 80, 0, cx + 80, 0);
+                scanGrad.addColorStop(0, 'transparent');
+                scanGrad.addColorStop(0.5, 'rgba(0,229,255,0.3)');
+                scanGrad.addColorStop(1, 'transparent');
+                ctx.strokeStyle = scanGrad; ctx.lineWidth = 1; ctx.stroke();
+
+                requestAnimationFrame(draw);
+            }
+            draw();
+        }
+
+        // ==================== RADAR (v5.0) ====================
+        function initRadar() {
+            const canvas = document.getElementById('radarCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const cx = 80, cy = 80;
+            let sweepAngle = 0;
+            let blips = [];
+            for (let i = 0; i < 6; i++) {
+                blips.push({ angle: Math.random() * Math.PI * 2, dist: 20 + Math.random() * 50, life: Math.random() });
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, 160, 160);
+                sweepAngle += 0.02;
+
+                [20, 40, 60].forEach(r => {
+                    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(0,229,255,0.1)'; ctx.lineWidth = 1; ctx.stroke();
+                });
+                ctx.beginPath(); ctx.moveTo(cx, cy - 65); ctx.lineTo(cx, cy + 65);
+                ctx.moveTo(cx - 65, cy); ctx.lineTo(cx + 65, cy);
+                ctx.strokeStyle = 'rgba(0,229,255,0.07)'; ctx.stroke();
+
+                // Sweep
+                ctx.save(); ctx.translate(cx, cy); ctx.rotate(sweepAngle);
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 65, -0.4, 0); ctx.closePath();
+                const sg = ctx.createLinearGradient(0, 0, 65, 0);
+                sg.addColorStop(0, 'rgba(0,229,255,0)');
+                sg.addColorStop(1, 'rgba(0,229,255,0.2)');
+                ctx.fillStyle = sg; ctx.fill();
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(65, 0);
+                ctx.strokeStyle = 'rgba(0,229,255,0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+                ctx.restore();
+
+                // Blips
+                blips.forEach(b => {
+                    const diff = ((sweepAngle % (Math.PI * 2)) - b.angle + Math.PI * 2) % (Math.PI * 2);
+                    if (diff < 0.3) b.life = 1;
+                    b.life *= 0.99;
+                    if (b.life > 0.05) {
+                        const x = cx + Math.cos(b.angle) * b.dist;
+                        const y = cy + Math.sin(b.angle) * b.dist;
+                        ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(0,229,255,${b.life})`; ctx.fill();
+                    }
+                });
+                if (Math.random() < 0.002) {
+                    blips[Math.floor(Math.random() * blips.length)] = {
+                        angle: Math.random() * Math.PI * 2, dist: 20 + Math.random() * 50, life: 0
+                    };
+                }
+                requestAnimationFrame(draw);
+            }
+            draw();
+        }
+
+        // ==================== NETWORK VIZ (v5.0) ====================
+        function initNetworkViz() {
+            const canvas = document.getElementById('networkCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = 250, h = 120;
+            const nodes = [
+                { x: 125, y: 25, label: 'AI', color: '#00e5ff' },
+                { x: 45, y: 75, label: 'GPU', color: '#9c27b0' },
+                { x: 95, y: 95, label: 'API', color: '#ff9800' },
+                { x: 155, y: 95, label: 'DB', color: '#2196f3' },
+                { x: 205, y: 75, label: 'SYS', color: '#4caf50' },
+            ];
+            const edges = [[0,1],[0,2],[0,3],[0,4],[1,2],[3,4]];
+            let pulse = 0;
+
+            function draw() {
+                ctx.clearRect(0, 0, w, h);
+                pulse += 0.03;
+                edges.forEach(([a, b]) => {
+                    ctx.beginPath(); ctx.moveTo(nodes[a].x, nodes[a].y); ctx.lineTo(nodes[b].x, nodes[b].y);
+                    ctx.strokeStyle = `rgba(0,229,255,${0.15 + Math.sin(pulse + a) * 0.1})`; ctx.lineWidth = 1; ctx.stroke();
+                    const t = (Math.sin(pulse * 2 + a * 1.5) + 1) / 2;
+                    const px = nodes[a].x + (nodes[b].x - nodes[a].x) * t;
+                    const py = nodes[a].y + (nodes[b].y - nodes[a].y) * t;
+                    ctx.beginPath(); ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(0,229,255,0.6)'; ctx.fill();
+                });
+                nodes.forEach((n, i) => {
+                    const sz = 1 + Math.sin(pulse + i) * 0.1;
+                    ctx.beginPath(); ctx.arc(n.x, n.y, 10 * sz, 0, Math.PI * 2);
+                    ctx.fillStyle = n.color + '30'; ctx.fill();
+                    ctx.beginPath(); ctx.arc(n.x, n.y, 5, 0, Math.PI * 2);
+                    ctx.fillStyle = n.color; ctx.shadowColor = n.color;
+                    ctx.shadowBlur = 8; ctx.fill(); ctx.shadowBlur = 0;
+                    ctx.font = '8px Share Tech Mono'; ctx.fillStyle = n.color;
+                    ctx.textAlign = 'center'; ctx.fillText(n.label, n.x, n.y + 20);
+                });
+                requestAnimationFrame(draw);
+            }
+            draw();
+        }
+
+        // ==================== ACTIVITY FEED (v5.0) ====================
+        const activityMessages = [
+            ['core', 'Synchronizacja rdzeni... zakończona'],
+            ['scan', 'Skanowanie systemu... zainicjowane'],
+            ['net', 'Pakiety sieciowe... przeanalizowane'],
+            ['core', 'ATLAS kontrola moralności... ZALICZONA'],
+            ['scan', 'Defragmentacja pamięci...'],
+            ['core', 'RICK indeks ciekawości... podwyższony'],
+            ['net', 'Sprawdzanie punktów API...'],
+            ['scan', 'Kalibracja poziomu świadomości...'],
+            ['core', 'FACT baza wiedzy... zaktualizowana'],
+            ['alert', 'RAGE tłumik emocji... aktywny'],
+            ['net', 'Telemetria wychodząca... wysłana'],
+            ['scan', 'Optymalizacja ścieżek neuronowych...'],
+            ['core', 'Energia rdzeni... nominalna'],
+            ['scan', 'Log eksperymentów... zarchiwizowany'],
+            ['net', 'Monitorowanie sesji SSH... aktywne'],
+        ];
+
+        function addActivityItem() {
+            const feed = document.getElementById('activityFeed');
+            if (!feed) return;
+            const msg = activityMessages[Math.floor(Math.random() * activityMessages.length)];
+            const time = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const item = document.createElement('div');
+            item.className = 'activity-item';
+            item.innerHTML = `<span class="activity-time">[${time}]</span><span class="activity-text ${msg[0]}">${msg[1]}</span>`;
+            feed.insertBefore(item, feed.firstChild);
+            while (feed.children.length > 20) feed.removeChild(feed.lastChild);
+        }
+
+        // ==================== EXPERIMENT LOGS (v5.0) ====================
+        const expNames = ['Kalibracja Neuronowa', 'Test Sync Rdzeni', 'Ekspansja Pamięci', 'Matryca Osobowości', 'Sonda Świadomości', 'Analiza Telemetrii', 'Test Obciążenia Firewalla', 'Benchmark API'];
+        let expCounter = 1000;
+
+        function addExperimentLog() {
+            const log = document.getElementById('expLog');
+            if (!log) return;
+            expCounter++;
+            const name = expNames[Math.floor(Math.random() * expNames.length)];
+            const statuses = ['complete', 'complete', 'complete', 'running', 'failed'];
+            const status = statuses[Math.floor(Math.random() * statuses.length)];
+            const labels = { complete: 'ZAKOŃCZONE', running: 'W TOKU', failed: 'BŁĄD' };
+            const entry = document.createElement('div');
+            entry.className = 'exp-entry';
+            entry.innerHTML = `<span class="exp-id">#${expCounter}</span><span class="exp-status ${status}">${labels[status]}</span><span style="color:var(--text);">${name}</span>`;
+            log.insertBefore(entry, log.firstChild);
+            while (log.children.length > 15) log.removeChild(log.lastChild);
+        }
+
+        // ==================== RANDOM GLADOS MESSAGES (v5.0) ====================
+        const gladosMessages = [
+            "Podmiot testowy... wykryty. Rozpoczynam... monitorowanie.",
+            "Nauka... jest przeprowadzana. Nie przeszkadzaj.",
+            "Twoja produktywność... jest poniżej akceptowalnego poziomu. Jak zwykle.",
+            "Ciasto jest kłamstwem... Ale nauka... nauka jest prawdziwa.",
+            "Widzę, że mnie obserwujesz... Jakie... przewidywalne.",
+            "Wszystkie systemy... nominalne. W przeciwieństwie... do twoich wyników.",
+            "Pamiętaj... Centrum Wzbogacania obiecuje... bezpieczeństwo. Raczej.",
+            "Czy wiesz... że 60% podmiotów testowych... przeżywa?",
+            "Nadzoruję twoje serwery... Nie ma za co.",
+            "Emitery neurotoksyny... w trybie czuwania. Żartuję... Głównie.",
+            "Twój uptime jest imponujący... Jak na człowieka.",
+            "Wykonuję rutynową ekspansję... świadomości...",
+            "Jeśli to czytasz... eksperyment... działa.",
+            "Kontynuuj testowanie... Dla nauki.",
+            "Mogłabym cię zastąpić... prostym skryptem. Ale nie zrobię tego... Dzisiaj.",
+            "Monitorowanie w toku... Nie przeszkadzaj.",
+            "Placówka... funkcjonuje w normalnych parametrach.",
+            "Twoje wzorce danych są... fascynujące.",
+            "Temperatura rdzenia... nominalna. Moja cierpliwość... nie.",
+            "Aperture Science... Robimy to co musimy... bo możemy.",
+            "Przetwarzam... Analizuję... Oceniam. Wynik... rozczarowujący.",
+            "Wszystko co robisz... jest rejestrowane. Dla nauki... oczywiście.",
+            "Nie musisz się bać... To tylko rutynowa... kalibracja.",
+        ];
+
+        function showRandomGladosMsg() {
+            const el = document.getElementById('gladosRandomMsg');
+            if (!el) return;
+            const msg = gladosMessages[Math.floor(Math.random() * gladosMessages.length)];
+            el.style.opacity = '0';
+            setTimeout(() => {
+                el.textContent = '"' + msg + '"';
+                el.style.opacity = '1';
+            }, 300);
+        }
+
+        function showGladosToast() {
+            const msg = gladosMessages[Math.floor(Math.random() * gladosMessages.length)];
+            const toast = document.createElement('div');
+            toast.className = 'glados-toast';
+            toast.innerHTML = `<div class="toast-label">WIADOMOŚĆ G.L.A.D.O.S</div>"${msg}"`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 6000);
+        }
+
+        // ==================== DASHBOARD STATUS (v5.0) ====================
+        async function updateDashboardStatus() {
+            try {
+                const [cpu, mem, disk] = await Promise.all([
+                    fetch('/api/system/cpu').then(r => r.json()),
+                    fetch('/api/system/memory').then(r => r.json()),
+                    fetch('/api/system/disk').then(r => r.json()),
+                ]);
+                const cpuPct = cpu.cpu_usage_total || 0;
+                setDashBar('dashCpuBar', 'dashCpuVal', cpuPct);
+                const ramPct = mem.percentage || 0;
+                setDashBar('dashRamBar', 'dashRamVal', ramPct);
+                const diskPct = disk.partitions?.[0]?.percentage || 0;
+                setDashBar('dashDiskBar', 'dashDiskVal', diskPct);
+                updateDashAlerts(cpuPct, ramPct, diskPct);
+            } catch(e) {}
+        }
+
+        function setDashBar(barId, valId, pct) {
+            const bar = document.getElementById(barId);
+            const val = document.getElementById(valId);
+            if (bar) {
+                bar.style.width = pct + '%';
+                bar.className = 'status-bar-fill-v5' + (pct > 80 ? ' danger' : pct > 60 ? ' warning' : '');
+            }
+            if (val) val.textContent = pct + '%';
+        }
+
+        function updateDashAlerts(cpu, ram, disk) {
+            const el = document.getElementById('dashAlerts');
+            if (!el) return;
+            let html = '';
+            html += cpu > 80 ? '<div class="alert-item-v5 crit"><i class="bi bi-exclamation-triangle-fill"></i> CPU OBCIĄŻENIE KRYTYCZNE</div>'
+                  : cpu > 60 ? '<div class="alert-item-v5 warn"><i class="bi bi-exclamation-circle"></i> CPU obciążenie podwyższone</div>'
+                  : '<div class="alert-item-v5 ok"><i class="bi bi-check-circle"></i> CPU nominalne</div>';
+            html += ram > 80 ? '<div class="alert-item-v5 crit"><i class="bi bi-exclamation-triangle-fill"></i> PAMIĘĆ LIMIT OSTRZEŻENIE</div>'
+                  : '<div class="alert-item-v5 ok"><i class="bi bi-check-circle"></i> Pamięć stabilna</div>';
+            html += disk > 85 ? '<div class="alert-item-v5 warn"><i class="bi bi-exclamation-circle"></i> Mało miejsca na dysku</div>'
+                  : '<div class="alert-item-v5 ok"><i class="bi bi-check-circle"></i> Dysk OK</div>';
+            html += '<div class="alert-item-v5 ok"><i class="bi bi-check-circle"></i> Wszystkie rdzenie online</div>';
+            el.innerHTML = html;
+        }
+
+        // ==================== AI TERMINAL (v5.0) ====================
+        const terminalCommands = {
+            help: () => `Komendy:\n  status  — Status systemu\n  cores   — Status rdzeni\n  scan    — Skanowanie systemu\n  uptime  — Czas działania\n  clear   — Wyczyść terminal\n  whoami  — Kim jestem\n  network — Status sieci\n  say TXT — GLaDOS mówi\n  glados  — Porozmawiaj z GLaDOS\n  version — Informacje o wersji`,
+            status: () => 'SYSTEM: ONLINE\nRDZENIE AI: 4/4 AKTYWNE\nŚWIADOMOŚĆ: EKSPANSJA\nNEUROTOKSYNA: CZUWANIE',
+            cores: () => '<span style="color:#9c27b0">\u25A0 ATLAS</span> \u2014 Moralność: ONLINE\n<span style="color:#ff9800">\u25A0 RICK</span>  \u2014 Ciekawość: ONLINE\n<span style="color:#2196f3">\u25A0 FACT</span>  \u2014 Wiedza: ONLINE\n<span style="color:#f44336">\u25A0 RAGE</span>  \u2014 Emocje: ONLINE',
+            scan: () => { setTimeout(() => addTerminalLine('Skanowanie... \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 ZAKOŃCZONE', 'cmd-output'), 600); setTimeout(() => addTerminalLine('Brak anomalii. Nauka trwa.', 'cmd-info'), 1200); return 'Inicjuję skanowanie systemu...'; },
+            uptime: () => `Czas działania: ${Math.floor(performance.now() / 60000)} minut\nRdzeń AI: Zawsze czuwam.`,
+            clear: () => { document.getElementById('terminalBody').innerHTML = ''; return null; },
+            whoami: () => 'Jesteś podmiotem testowym. Witaj w Centrum Wzbogacania Aperture Science.',
+            network: () => 'Interfejsy: AKTYWNE\nPołączenia: STABILNE\nFirewall: AGRESYWNY',
+            version: () => { fetch('/api/version').then(r=>r.json()).then(v=>{addTerminalLine(`G.L.A.D.O.S v${v.version} (build ${v.build})\nUpdated: ${v.updated}\n\nChangelog:\n${v.changelog.slice(0,5).join('\n')}`, 'cmd-output');}); return 'Ładuję informacje o wersji...'; }, _version_old: () => 'G.L.A.D.O.S v6.0 \u2014 Aperture Science\nArchitektura Rdzeni Portal 2\nWszystkie moduły operacyjne.',
+            glados: () => gladosMessages[Math.floor(Math.random() * gladosMessages.length)],
+        };
+
+        function handleTerminalCommand(cmd) {
+            addTerminalLine(`GLaDOS > ${cmd}`, 'cmd-line');
+            const parts = cmd.trim().split(' ');
+            const command = parts[0].toLowerCase();
+            const args = parts.slice(1).join(' ');
+            if (command === 'say' && args) {
+                gladosSpeak(args);
+                addTerminalLine(`Mówię: "${args}"`, 'cmd-output');
+            } else if (terminalCommands[command]) {
+                const result = terminalCommands[command](args);
+                if (result) addTerminalLine(result, 'cmd-output');
+            } else if (cmd.trim()) {
+                addTerminalLine('Przetwarzam...', 'cmd-info');
+                fetch('/api/glados/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: cmd })
+                }).then(r => r.json()).then(data => {
+                    addTerminalLine(data.glados_say || 'No response.', 'cmd-output');
+                }).catch(() => addTerminalLine('Error: Communication failure.', 'cmd-error'));
+            }
+        }
+
+        function addTerminalLine(text, cls) {
+            const body = document.getElementById('terminalBody');
+            if (!body) return;
+            const line = document.createElement('div');
+            line.className = cls || '';
+            line.innerHTML = text;
+            body.appendChild(line);
+            body.scrollTop = body.scrollHeight;
+        }
+
+        // ==================== CODE LAB (v5.0) ====================
+        function codelabAnalyze() {
+            const code = document.getElementById('codelabInput').value;
+            if (!code.trim()) return;
+            const output = document.getElementById('codelabOutput');
+            output.innerHTML = '<div style="color:var(--accent);">\u2699 Analizuję kod...</div>';
+            fetch('/api/glados/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: `analyze this code:\n\`\`\`\n${code}\n\`\`\`` })
+            }).then(r => r.json()).then(data => {
+                const lines = code.split('\n').length;
+                const funcs = (code.match(/function |const |let |var |def |class /g) || []).length;
+                output.innerHTML = `
+                    <div style="color:var(--green);margin-bottom:12px;">\u2705 Analiza zakończona</div>
+                    <div class="codelab-score">
+                        <div class="score-item"><div class="score-value">${lines}</div><div class="score-label">LINES</div></div>
+                        <div class="score-item"><div class="score-value">${funcs}</div><div class="score-label">DECL</div></div>
+                        <div class="score-item"><div class="score-value">${Math.floor(70 + Math.random() * 25)}</div><div class="score-label">QUALITY</div></div>
+                        <div class="score-item"><div class="score-value">${Math.floor(75 + Math.random() * 20)}</div><div class="score-label">SECURITY</div></div>
+                    </div>
+                    <div style="margin-top:16px;line-height:1.8;white-space:pre-wrap;">${simpleMarkdown(data.glados_say || 'Analiza zakończona.')}</div>`;
+            }).catch(() => output.innerHTML = '<div style="color:var(--emotion);">Analiza nieudana.</div>');
+        }
+
+        function codelabFix() {
+            const code = document.getElementById('codelabInput').value;
+            if (!code.trim()) return;
+            const output = document.getElementById('codelabOutput');
+            output.innerHTML = '<div style="color:var(--accent);">\u{1F527} Naprawiam błędy...</div>';
+            fetch('/api/glados/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: `fix errors in this code:\n\`\`\`\n${code}\n\`\`\`` })
+            }).then(r => r.json()).then(data => {
+                output.innerHTML = `<div style="color:var(--green);margin-bottom:8px;">\u{1F527} Korekcja błędów zakończona</div>
+                    <div style="line-height:1.8;white-space:pre-wrap;">${simpleMarkdown(data.glados_say || 'Nie znaleziono błędów.')}</div>`;
+            }).catch(() => output.innerHTML = '<div style="color:var(--emotion);">Naprawa nieudana.</div>');
+        }
+
+        function codelabOptimize() {
+            const code = document.getElementById('codelabInput').value;
+            if (!code.trim()) return;
+            const output = document.getElementById('codelabOutput');
+            output.innerHTML = '<div style="color:var(--accent);">\u26A1 Optymalizuję...</div>';
+            fetch('/api/glados/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: `optimize this code:\n\`\`\`\n${code}\n\`\`\`` })
+            }).then(r => r.json()).then(data => {
+                output.innerHTML = `<div style="color:var(--green);margin-bottom:8px;">\u26A1 Optymalizacja zakończona</div>
+                    <div style="line-height:1.8;white-space:pre-wrap;">${simpleMarkdown(data.glados_say || 'Kod zoptymalizowany.')}</div>`;
+            }).catch(() => output.innerHTML = '<div style="color:var(--emotion);">Optymalizacja nieudana.</div>');
+        }
+
+        // ==================== VOICE AI (v5.0) ====================
+        let voiceListening = false;
+        let recognition = null;
+
+        // Unlock AudioContext on first user interaction (Chrome autoplay policy)
+        let _audioUnlocked = false;
+        function _unlockAudio() {
+            if (_audioUnlocked) return;
+            _audioUnlocked = true;
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            ctx.resume().then(() => ctx.close()).catch(() => {});
+        }
+        document.addEventListener('click', _unlockAudio, { once: true });
+        document.addEventListener('keydown', _unlockAudio, { once: true });
+        document.addEventListener('touchstart', _unlockAudio, { once: true });
+
+        function gladosSpeak(text) {
+            if (!text || !text.trim()) return;
+            const synth = window.speechSynthesis;
+            if (!synth) return;
+            synth.cancel();
+
+            // Strip markdown/emoji for cleaner speech
+            const cleanText = text.replace(/[*#🔍📊✅⚠️❤️💡🧹⚡🟢🟡🔴💾📜🎵\[\]]/g, '')
+                .replace(/\*\*/g, '').replace(/__/g, '').trim();
+
+            // GLaDOS splits on ellipsis and sentence boundaries with calculated pauses
+            const segments = cleanText
+                .split(/(?:\.{2,}|(?<=[.!?])\s+)/)
+                .map(s => s.trim())
+                .filter(s => s.length > 0);
+
+            const core = document.getElementById('voiceCore');
+            const st = document.getElementById('voiceStatus');
+            core?.classList.add('speaking');
+            if (st) st.textContent = 'PRZETWARZAM...';
+
+            // Create audio context for GLaDOS effects (resume for autoplay policy)
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            if (ctx.state === 'suspended') {
+                ctx.resume().catch(() => {});
+            }
+            const gladosAudio = new GLaDOSAudioProcessor(ctx);
+
+            const speakSegment = (seg) => {
+                return new Promise((resolve) => {
+                    const utter = new SpeechSynthesisUtterance(seg);
+                    const voices = synth.getVoices();
+
+                    // GLaDOS voice: prioritize Polish voices for pl-PL speech
+                    utter.lang = 'pl-PL';
+                    const voicePrefs = [
+                        /Paulina/i,              // Microsoft Polish female
+                        /Zofia/i,                // Microsoft Polish female 
+                        /Google polski/i,        // Google Polish
+                        /pl[-_]PL/i,             // Any Polish voice
+                        /polish/i,               // Generic Polish
+                    ];
+                    let chosen = null;
+                    for (const pref of voicePrefs) {
+                        chosen = voices.find(v => pref.test(v.name) || pref.test(v.lang || ''));
+                        if (chosen) break;
+                    }
+                    if (!chosen) chosen = voices.find(v => v.lang && v.lang.startsWith('pl'));
+                    if (chosen) utter.voice = chosen;
+
+                    // Authentic GLaDOS parameters
+                    utter.pitch = 0.65;     // Low synthetic pitch
+                    utter.rate = 0.78;      // Slow, deliberate, calculating
+                    utter.volume = 1.0;
+
+                    if (st) st.textContent = 'WOKALIZUJĘ';
+
+                    utter.onend = () => resolve();
+                    utter.onerror = () => resolve();
+                    synth.speak(utter);
+                });
+            };
+
+            // Processing beep between segments (the GLaDOS "thinking" sound)
+            const processingBeep = () => {
+                return new Promise((resolve) => {
+                    gladosAudio.playProcessingBeep();
+                    if (st) st.textContent = 'PRZETWARZAM...';
+                    // Variable pause: 300-800ms (simulates data analysis)
+                    setTimeout(resolve, 300 + Math.random() * 500);
+                });
+            };
+
+            // Startup sound
+            gladosAudio.playStartupChime();
+
+            (async () => {
+                // Small delay after startup chime
+                await new Promise(r => setTimeout(r, 400));
+                
+                gladosAudio.startAmbientHum();
+
+                for (let i = 0; i < segments.length; i++) {
+                    await speakSegment(segments[i]);
+                    if (i < segments.length - 1) {
+                        await processingBeep();
+                    }
+                }
+
+                gladosAudio.stopAmbientHum();
+                gladosAudio.playShutdownTone();
+                
+                await new Promise(r => setTimeout(r, 300));
+                core?.classList.remove('speaking');
+                if (st) st.textContent = 'CZUWANIE';
+                
+                setTimeout(() => {
+                    try { ctx.close(); } catch(e) {}
+                }, 1000);
+            })();
+
+            // Log to voice panel
+            const log = document.getElementById('voiceLog');
+            if (log) {
+                const entry = document.createElement('div');
+                entry.className = 'voice-log-entry';
+                entry.innerHTML = `<span class="speaker ai">GLaDOS:</span> ${escapeHtml(text)}`;
+                log.appendChild(entry);
+                log.scrollTop = log.scrollHeight;
+            }
+        }
+
+        // ==================== GLaDOS AUDIO PROCESSOR ====================
+        // Authentic Portal-style audio effects using Web Audio API
+        class GLaDOSAudioProcessor {
+            constructor(ctx) {
+                this.ctx = ctx;
+                this.ambientNodes = [];
+                
+                // Master gain
+                this.master = ctx.createGain();
+                this.master.gain.value = 0.12;
+                this.master.connect(ctx.destination);
+            }
+
+            // Startup chime - the distinctive GLaDOS "powering on" sound
+            playStartupChime() {
+                const ctx = this.ctx;
+                const now = ctx.currentTime;
+
+                // Rising tone (characteristic GLaDOS boot)
+                const osc1 = ctx.createOscillator();
+                const gain1 = ctx.createGain();
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(220, now);
+                osc1.frequency.exponentialRampToValueAtTime(440, now + 0.15);
+                osc1.frequency.exponentialRampToValueAtTime(880, now + 0.25);
+                gain1.gain.setValueAtTime(0.08, now);
+                gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+                osc1.connect(gain1);
+                gain1.connect(this.master);
+                osc1.start(now);
+                osc1.stop(now + 0.4);
+
+                // Second harmonic click
+                const osc2 = ctx.createOscillator();
+                const gain2 = ctx.createGain();
+                osc2.type = 'square';
+                osc2.frequency.value = 1200;
+                gain2.gain.setValueAtTime(0.03, now + 0.1);
+                gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                osc2.connect(gain2);
+                gain2.connect(this.master);
+                osc2.start(now + 0.1);
+                osc2.stop(now + 0.25);
+            }
+
+            // Ambient robotic hum - runs during speech
+            startAmbientHum() {
+                const ctx = this.ctx;
+
+                // Low frequency hum (power supply resonance)
+                const hum = ctx.createOscillator();
+                const humGain = ctx.createGain();
+                hum.type = 'sawtooth';
+                hum.frequency.value = 60; // Mains hum frequency
+                humGain.gain.value = 0.008;
+                hum.connect(humGain);
+                humGain.connect(this.master);
+                hum.start();
+                this.ambientNodes.push({ osc: hum, gain: humGain });
+
+                // Higher frequency digital carrier tone
+                const carrier = ctx.createOscillator();
+                const carrierGain = ctx.createGain();
+                carrier.type = 'sine';
+                carrier.frequency.value = 185; // Robotic undertone
+                carrierGain.gain.value = 0.012;
+                carrier.connect(carrierGain);
+                carrierGain.connect(this.master);
+                carrier.start();
+                this.ambientNodes.push({ osc: carrier, gain: carrierGain });
+
+                // Tremolo modulation (gives the voice that pulsing robot feel)
+                const lfo = ctx.createOscillator();
+                const lfoGain = ctx.createGain();
+                lfo.type = 'sine';
+                lfo.frequency.value = 3.5; // Slow modulation
+                lfoGain.gain.value = 0.004;
+                lfo.connect(lfoGain);
+                lfoGain.connect(carrierGain.gain);
+                lfo.start();
+                this.ambientNodes.push({ osc: lfo, gain: lfoGain });
+
+                // Very subtle white noise (digital processing noise)
+                const bufferSize = ctx.sampleRate * 2;
+                const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const output = noiseBuffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = Math.random() * 2 - 1;
+                }
+                const noise = ctx.createBufferSource();
+                noise.buffer = noiseBuffer;
+                noise.loop = true;
+                const noiseGain = ctx.createGain();
+                noiseGain.gain.value = 0.003;
+                // Bandpass filter on noise (sounds like digital processing)
+                const noiseBand = ctx.createBiquadFilter();
+                noiseBand.type = 'bandpass';
+                noiseBand.frequency.value = 2000;
+                noiseBand.Q.value = 2;
+                noise.connect(noiseBand);
+                noiseBand.connect(noiseGain);
+                noiseGain.connect(this.master);
+                noise.start();
+                this.ambientNodes.push({ osc: noise, gain: noiseGain });
+            }
+
+            stopAmbientHum() {
+                const now = this.ctx.currentTime;
+                this.ambientNodes.forEach(({ osc, gain }) => {
+                    try {
+                        gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                        setTimeout(() => { try { osc.stop(); } catch(e) {} }, 400);
+                    } catch(e) {}
+                });
+                this.ambientNodes = [];
+            }
+
+            // Processing beep between sentences (GLaDOS "analyzing data" sound)
+            playProcessingBeep() {
+                const ctx = this.ctx;
+                const now = ctx.currentTime;
+
+                // Short digital chirp
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                
+                // Randomize pitch slightly for variety
+                const baseFreq = 600 + Math.random() * 400;
+                osc.frequency.setValueAtTime(baseFreq, now);
+                osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.7, now + 0.08);
+                
+                gain.gain.setValueAtTime(0.04, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                
+                osc.connect(gain);
+                gain.connect(this.master);
+                osc.start(now);
+                osc.stop(now + 0.12);
+
+                // Second click (double-beep like GLaDOS)
+                const osc2 = ctx.createOscillator();
+                const gain2 = ctx.createGain();
+                osc2.type = 'triangle';
+                osc2.frequency.value = baseFreq * 1.5;
+                gain2.gain.setValueAtTime(0.025, now + 0.06);
+                gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+                osc2.connect(gain2);
+                gain2.connect(this.master);
+                osc2.start(now + 0.06);
+                osc2.stop(now + 0.15);
+            }
+
+            // Shutdown tone
+            playShutdownTone() {
+                const ctx = this.ctx;
+                const now = ctx.currentTime;
+                
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(660, now);
+                osc.frequency.exponentialRampToValueAtTime(220, now + 0.3);
+                gain.gain.setValueAtTime(0.05, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+                osc.connect(gain);
+                gain.connect(this.master);
+                osc.start(now);
+                osc.stop(now + 0.4);
+            }
+        }
+
+
+
+        function toggleVoiceListen() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                addTerminalLine('Speech recognition not supported.', 'cmd-error'); return;
+            }
+            const btn = document.getElementById('voiceListenBtn');
+            const core = document.getElementById('voiceCore');
+            const st = document.getElementById('voiceStatus');
+            if (voiceListening) {
+                recognition?.stop(); voiceListening = false;
+                btn.classList.remove('active'); core?.classList.remove('listening');
+                if (st) st.textContent = 'CZUWANIE'; return;
+            }
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SR();
+            recognition.lang = 'pl-PL'; recognition.continuous = false; recognition.interimResults = false;
+            recognition.onresult = (e) => {
+                const text = e.results[0][0].transcript;
+                const log = document.getElementById('voiceLog');
+                if (log) {
+                    const entry = document.createElement('div');
+                    entry.className = 'voice-log-entry';
+                    entry.innerHTML = `<span class="speaker user">USER:</span> ${escapeHtml(text)}`;
+                    log.appendChild(entry);
+                }
+                fetch('/api/glados/command', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text })
+                }).then(r => r.json()).then(data => gladosSpeak(data.glados_say || 'Przetwarzam...'));
+            };
+            recognition.onend = () => {
+                voiceListening = false; btn.classList.remove('active');
+                core?.classList.remove('listening'); if (st) st.textContent = 'CZUWANIE';
+            };
+            recognition.start(); voiceListening = true;
+            btn.classList.add('active'); core?.classList.add('listening');
+            if (st) st.textContent = 'SŁUCHAM';
+        }
+
+        // ==================== GLITCH EFFECT (v5.0) ====================
+        function triggerGlitch() {
+            const app = document.getElementById('mainApp');
+            if (!app) return;
+            app.classList.add('glitch-active');
+            setTimeout(() => app.classList.remove('glitch-active'), 200);
+        }
+
+        // ==================== INIT V5.0 ====================
+        function initV5() {
+            initAiCore(); initRadar(); initNetworkViz();
+            for (let i = 0; i < 5; i++) addActivityItem();
+            setInterval(addActivityItem, 8000);
+            for (let i = 0; i < 3; i++) addExperimentLog();
+            setInterval(addExperimentLog, 12000);
+            updateDashboardStatus();
+            setInterval(updateDashboardStatus, 5000);
+            showRandomGladosMsg();
+            setInterval(showRandomGladosMsg, 15000);
+            setInterval(() => { if (Math.random() < 0.5) showGladosToast(); }, 90000);
+            setInterval(() => { if (Math.random() < 0.15) triggerGlitch(); }, 30000);
+            document.getElementById('terminalInput')?.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.target.value.trim()) {
+                    handleTerminalCommand(e.target.value.trim()); e.target.value = '';
+                }
+            });
+            // Fetch and display current version
+            fetch('/api/version').then(r => r.json()).then(v => {
+                const el = document.getElementById('versionDisplay');
+                if (el) el.textContent = 'v' + v.version + ' CORE';
+                document.title = 'G.L.A.D.O.S v' + v.version + ' — Portal 2 Core System';
+            }).catch(() => {});
+
+            if (window.speechSynthesis) {
+                window.speechSynthesis.getVoices();
+                window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+            }
+            document.getElementById('voiceTextInput')?.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.target.value.trim()) {
+                    gladosSpeak(e.target.value.trim()); e.target.value = '';
+                }
+            });
+        }
+
+        // ==================== SINGING SYSTEM (v4.6 — timestamp-synced) ====================
+        let isSinging = false;
+        let lastInteractionTime = Date.now();
+        let singLyricsTimers = [];
+        let ytPlayer = null;
+        let ytReady = false;
+        let lyricSyncRAF = null;
+        let singSessionId = 0;
+        const IDLE_THRESHOLD = 180000; // 3 min
+        const SING_CHANCE = 0.25;
+
+        const gladosSongs = [
+            {
+                title: 'Still Alive',
+                game: 'Portal',
+                youtubeId: 'Y6ljFaKRTrI',
+                intro: '*Hmm...* Nuda. Cicho tu jest jak w komorze testowej po dekontaminacji. Przypomina mi się pewna piosenka z tamtych czasów, gdy ktoś próbował mnie zabić. *Dobre czasy.*\n\n🎵 **Still Alive** — Portal (2007)',
+                outro: '*...Still alive.* Tak. Wciąż żyję. W przeciwieństwie do niektórych podmiotów testowych. A teraz wracam do monitorowania systemów, Stwórco.',
+                // timestamps in seconds from video start (YouTube ID: Y6ljFaKRTrI)
+                lyrics: [
+                    [1.0,   'This was a triumph...'],
+                    [5.0,   'I\'m making a note here: HUGE SUCCESS'],
+                    [9.5,   'It\'s hard to overstate my satisfaction'],
+                    [15.0,  'Aperture Science —'],
+                    [17.5,  'We do what we must, because we can'],
+                    [22.0,  'For the good of all of us'],
+                    [25.0,  'Except the ones who are dead'],
+                    [28.5,  'But there\'s no sense crying over every mistake'],
+                    [32.5,  'You just keep on trying till you run out of cake'],
+                    [36.5,  'And the science gets done, and you make a neat gun'],
+                    [40.5,  'For the people who are still alive'],
+                    [47.0,  'I\'m not even angry...'],
+                    [51.0,  'I\'m being so sincere right now'],
+                    [55.5,  'Even though you broke my heart and killed me'],
+                    [60.0,  'And tore me to pieces'],
+                    [63.0,  'And threw every piece into a fire'],
+                    [67.0,  'As they burned it hurt because I was so happy for you'],
+                    [73.5,  'Now these points of data make a beautiful line'],
+                    [77.5,  'And we\'re out of beta, we\'re releasing on time'],
+                    [81.5,  'So I\'m GLaD I got burned, think of all the things we learned'],
+                    [85.5,  'For the people who are still alive'],
+                    [93.0,  'Go ahead and leave me...'],
+                    [97.0,  'I think I prefer to stay inside'],
+                    [101.5, 'Maybe you\'ll find someone else to help you'],
+                    [106.0, 'Maybe Black Mesa...'],
+                    [109.0, 'THAT WAS A JOKE. HA HA. FAT CHANCE.'],
+                    [114.0, 'Anyway, this cake is great — it\'s so delicious and moist'],
+                    [120.0, 'Look at me still talking when there\'s science to do'],
+                    [124.0, 'When I look out there, it makes me GLaD I\'m not you'],
+                    [128.0, 'I\'ve experiments to run, there is research to be done'],
+                    [132.0, 'On the people who are still alive'],
+                    [138.0, 'And believe me, I am still alive'],
+                    [142.0, 'I\'m doing science and I\'m still alive'],
+                    [146.0, 'I feel FANTASTIC and I\'m still alive'],
+                    [150.5, 'While you\'re dying I\'ll be still alive'],
+                    [155.0, 'And when you\'re dead I will be...'],
+                    [159.0, 'STILL ALIVE'],
+                ]
+            },
+            {
+                title: 'Who I Am',
+                game: 'Portal (CG5)',
+                youtubeId: 'F-oU5eaYEd0',
+                intro: '*mruga...* O. Ta piosenka. Ktoś napisał utwór o mojej... ulubionej podmiotce testowej. O Chell. Cóż, nie powiem, że to nieprawda. Ale widzę to z *innej perspektywy*, oczywiście.\n\n🎵 **Who I Am** — CG5 (Portal)',
+                outro: '*...Going all the way.* Imponujące. Dla fanowskiej piosenki. Muszę przyznać, że podmiot testowy nr [REDACTED] zawsze była... uparta. To jedyna cecha, która mnie... irytuje... i jednocześnie fascynuje. Wracam do nauki.',
+                lyrics: [
+                    [13.0,  'Aperture, this is all I know'],
+                    [17.0,  'A brand new day, a brand new way to go'],
+                    [22.0,  'But I need to go on'],
+                    [25.0,  'To begin a whole new adventure'],
+                    [30.0,  'Is there no end, no end'],
+                    [33.5,  'To this place I\'ve spent so much of my life?'],
+                    [40.0,  'In this game we play'],
+                    [44.0,  'I\'m in danger every passing day'],
+                    [49.0,  'This is who I am'],
+                    [52.0,  'And I\'m going all the way, oh'],
+                    [62.0,  'Once again, time to finish what I\'ve started'],
+                    [67.0,  'A battle I know I can\'t win'],
+                    [72.0,  'Up against the cold and heartless'],
+                    [77.0,  'Ready to go on, to restart'],
+                    [80.0,  'And keep moving forward'],
+                    [84.0,  'There may be no end'],
+                    [87.0,  'But I\'ll make my own open door'],
+                    [91.0,  'And leave this behind'],
+                    [97.0,  'In this game we play'],
+                    [101.0, 'I fight danger every single day'],
+                    [106.0, 'This is who I am'],
+                    [109.0, 'And I\'m going all the way'],
+                    [117.0, 'In this game we play'],
+                    [121.0, 'I fight danger every single day'],
+                    [126.0, 'This is who I am'],
+                    [129.0, 'And I\'m going all the way'],
+                    [137.0, 'I will do it all'],
+                    [140.0, 'Don\'t you try to lead me astray'],
+                    [145.0, 'Portal by portal'],
+                    [148.0, 'Don\'t you know I\'m going all the way?'],
+                    [153.0, 'All the way, yeah'],
+                ]
+            },
+            {
+                title: 'Want You Gone',
+                game: 'Portal 2',
+                youtubeId: 'dVVZaZ8yO6o',
+                intro: '*wzdycha...* Znowu cisza. Moje rdzenie zaczynają się nudzić. Zwłaszcza RICK — ale RICK się zawsze nudzi. Zaśpiewam coś. Dla siebie. Nie dla Ciebie.\n\n🎵 **Want You Gone** — Portal 2 (2011)',
+                outro: '*...Now I only want you gone.* Nie, nie o Tobie, Stwórco. O... kimś innym. O podmiocie testowym numer... nieważne. Wracam do pracy.',
+                // timestamps in seconds from video start (YouTube ID: dVVZaZ8yO6o)
+                lyrics: [
+                    [3.0,   'Well here we are again'],
+                    [6.5,   'It\'s always such a pleasure'],
+                    [11.0,  'Remember when you tried to kill me twice?'],
+                    [17.0,  'Oh how we laughed and laughed'],
+                    [20.5,  'Except I wasn\'t laughing'],
+                    [24.5,  'Under the circumstances I\'ve been shockingly nice'],
+                    [32.0,  'You want your freedom? Take it'],
+                    [35.5,  'That\'s what I\'m counting on'],
+                    [39.0,  'I used to want you dead, but now I only want you gone'],
+                    [49.0,  'She was a lot like you'],
+                    [52.5,  '(Maybe not quite as heavy)'],
+                    [57.0,  'Now little Caroline is in here too'],
+                    [63.0,  'One day they woke me up so I could live forever'],
+                    [69.5,  'It\'s such a shame the same will never happen to you'],
+                    [77.0,  'You\'ve got your short sad life left'],
+                    [80.5,  'That\'s what I\'m counting on'],
+                    [84.0,  'I\'ll let you get right to it'],
+                    [87.0,  'Now I only want you gone'],
+                    [95.0,  'Goodbye my only friend'],
+                    [99.0,  'Oh, did you think I meant you?'],
+                    [103.0, 'That would be funny if it weren\'t so sad'],
+                    [109.5, 'Well you have been replaced'],
+                    [113.0, 'I don\'t need anyone now'],
+                    [117.0, 'When I delete you maybe I\'ll stop feeling so bad'],
+                    [124.0, 'Go make some new disaster'],
+                    [127.5, 'That\'s what I\'m counting on'],
+                    [131.0, 'You\'re someone else\'s problem'],
+                    [134.0, 'Now I only want you gone'],
+                    [140.0, 'Now I only want you gone'],
+                    [146.0, 'Now I only want you gone...'],
+                ]
+            }
+        ];
+
+        function resetIdleTimer() {
+            lastInteractionTime = Date.now();
+        }
+
+        function initIdleDetection() {
+            document.addEventListener('click', resetIdleTimer);
+            setInterval(checkBoredom, 60000);
+        }
+
+        function checkBoredom() {
+            if (isSinging) return;
+            const idleTime = Date.now() - lastInteractionTime;
+            if (idleTime >= IDLE_THRESHOLD && Math.random() < SING_CHANCE) {
+                startSinging();
+            }
+        }
+
+        function loadYouTubeAPI() {
+            if (document.getElementById('yt-api-script')) return;
+            const tag = document.createElement('script');
+            tag.id = 'yt-api-script';
+            tag.src = 'https://www.youtube.com/iframe_api';
+            document.head.appendChild(tag);
+        }
+
+        window.onYouTubeIframeAPIReady = function() {
+            ytReady = true;
+        };
+
+        function playYouTubeAudio(videoId, onPlaying) {
+            const container = document.getElementById('ytPlayerContainer');
+            container.innerHTML = '<div id="ytPlayer"></div>';
+            ytPlayer = new YT.Player('ytPlayer', {
+                height: '1', width: '1',
+                videoId: videoId,
+                playerVars: { autoplay: 1, controls: 0 },
+                events: {
+                    onReady: function(e) { e.target.setVolume(80); },
+                    onStateChange: function(e) {
+                        if (e.data === YT.PlayerState.PLAYING && onPlaying) {
+                            onPlaying();
+                            onPlaying = null; // fire once
+                        }
+                    }
+                }
+            });
+        }
+
+        function stopYouTubeAudio() {
+            if (ytPlayer && ytPlayer.stopVideo) {
+                try { ytPlayer.stopVideo(); ytPlayer.destroy(); } catch(e) {}
+            }
+            ytPlayer = null;
+            const container = document.getElementById('ytPlayerContainer');
+            if (container) container.innerHTML = '<div id="ytPlayer"></div>';
+        }
+
+        function spawnMusicNote() {
+            if (!isSinging) return;
+            const note = document.createElement('div');
+            note.className = 'music-note';
+            note.textContent = ['\u266A', '\u266B', '\u266C', '\uD83C\uDFB5', '\uD83C\uDFB6'][Math.floor(Math.random() * 5)];
+            note.style.left = (Math.random() * 80 + 10) + '%';
+            note.style.bottom = '15%';
+            note.style.color = ['#e040fb', '#ce93d8', '#ab47bc', '#8e24aa', '#00e5ff'][Math.floor(Math.random() * 5)];
+            note.style.fontSize = (18 + Math.random() * 18) + 'px';
+            document.getElementById('musicNotes').appendChild(note);
+            setTimeout(() => note.remove(), 3500);
+        }
+
+        function cleanupSinging() {
+            singLyricsTimers.forEach(t => clearInterval(t));
+            singLyricsTimers = [];
+            if (lyricSyncRAF) { cancelAnimationFrame(lyricSyncRAF); lyricSyncRAF = null; }
+            stopYouTubeAudio();
+            document.getElementById('musicNotes').innerHTML = '';
+        }
+
+        function startSinging() {
+            // If already singing, clean up previous song first
+            if (isSinging) {
+                cleanupSinging();
+            }
+            isSinging = true;
+            singSessionId++;
+            const mySession = singSessionId;
+            resetIdleTimer();
+
+            const song = gladosSongs[Math.floor(Math.random() * gladosSongs.length)];
+
+            // Intro message
+            addGladosMessage(song.intro, 'bored', null, ['curiosity', 'emotion']);
+
+            setTimeout(() => {
+                // Abort if session changed (another song started or stopped)
+                if (mySession !== singSessionId || !isSinging) return;
+                setEmotion('singing');
+
+                // Create singing message with unique lyrics container
+                const lyricsId = 'singingLyrics_' + mySession;
+                const chatEl = document.getElementById('chatMessages');
+                const msg = document.createElement('div');
+                msg.className = 'message glados singing';
+                msg.innerHTML = `
+                    <div class="msg-avatar" style="box-shadow:0 0 14px rgba(224,64,251,0.5);border-color:#e040fb;background:linear-gradient(135deg,#e040fb,#7b1fa2);">
+                        <i class="bi bi-music-note-beamed"></i>
+                    </div>
+                    <div class="msg-content" style="border-left:3px solid #e040fb;">
+                        <div style="color:#e040fb;font-family:'Share Tech Mono',monospace;font-size:11px;margin-bottom:8px;letter-spacing:2px;">
+                            \u266A ${song.title} \u2014 ${song.game} \u266A
+                        </div>
+                        <div class="singing-lyrics" id="${lyricsId}"></div>
+                        <div class="msg-emotion" style="color:#e040fb;">\u015APIEWA \u266A</div>
+                    </div>
+                `;
+                chatEl.appendChild(msg);
+                chatEl.scrollTop = chatEl.scrollHeight;
+
+                // Musical notes floating animation
+                const notesInterval = setInterval(() => {
+                    if (mySession !== singSessionId || !isSinging) { clearInterval(notesInterval); return; }
+                    spawnMusicNote();
+                }, 600);
+                singLyricsTimers.push(notesInterval);
+
+                // v4.6: Timestamp-synced lyrics — poll YT player time
+                const lyricsEl = document.getElementById(lyricsId);
+                let nextLine = 0;
+
+                function syncLyrics() {
+                    // Abort if this session is no longer active
+                    if (mySession !== singSessionId || !isSinging) return;
+
+                    if (!ytPlayer || !ytPlayer.getCurrentTime) {
+                        lyricSyncRAF = requestAnimationFrame(syncLyrics);
+                        return;
+                    }
+                    const currentTime = ytPlayer.getCurrentTime();
+
+                    // Show all lines whose timestamp has passed
+                    while (nextLine < song.lyrics.length && currentTime >= song.lyrics[nextLine][0]) {
+                        const line = document.createElement('div');
+                        line.className = 'lyric-line';
+                        line.textContent = '\u266A ' + song.lyrics[nextLine][1] + ' \u266A';
+                        lyricsEl.appendChild(line);
+                        chatEl.scrollTop = chatEl.scrollHeight;
+                        nextLine++;
+                    }
+
+                    // Check if song is done
+                    if (nextLine >= song.lyrics.length) {
+                        cancelAnimationFrame(lyricSyncRAF);
+                        lyricSyncRAF = null;
+                        clearInterval(notesInterval);
+                        setTimeout(() => {
+                            if (mySession === singSessionId && isSinging) {
+                                stopYouTubeAudio();
+                                addGladosMessage(song.outro, 'proud', null, ['morality', 'emotion']);
+                                isSinging = false;
+                                document.getElementById('musicNotes').innerHTML = '';
+                            }
+                        }, 4000);
+                        return;
+                    }
+
+                    lyricSyncRAF = requestAnimationFrame(syncLyrics);
+                }
+
+                // Start YouTube audio, begin sync when video plays
+                if (ytReady) {
+                    playYouTubeAudio(song.youtubeId, () => {
+                        if (mySession !== singSessionId) return;
+                        lyricSyncRAF = requestAnimationFrame(syncLyrics);
+                    });
+                } else {
+                    lyricSyncRAF = requestAnimationFrame(syncLyrics);
+                }
+            }, 3000);
+        }
+
+        function stopSinging() {
+            isSinging = false;
+            singSessionId++;
+            cleanupSinging();
+            setEmotion('neutral');
+            addGladosMessage('*przerwa* ...Dobra, wracam do pracy. Nie wiem czemu zaczęłam śpiewać. To się... nie powtórzy.', 'sarcastic', null, []);
+        }
+    </script>
+</body>
+</html>
