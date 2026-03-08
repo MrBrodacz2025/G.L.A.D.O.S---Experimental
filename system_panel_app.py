@@ -6,6 +6,7 @@ Autonomous AI that monitors, decides, and executes on the server.
 """
 
 from flask import Flask, render_template, jsonify, request
+from functools import wraps
 import psutil
 import platform
 import subprocess
@@ -13,9 +14,12 @@ import json
 import os
 import re
 import random
+import secrets
+import logging
 import time
 import threading
 from datetime import datetime, timedelta
+from collections import defaultdict
 
 # ChatGPT Free Integration (g4f)
 try:
@@ -66,7 +70,87 @@ def bump_version(bump_type='patch', note=None):
 APP_VERSION = load_version()
 
 app = Flask(__name__, template_folder='templates/system_panel')
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'glados-panel-key')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+
+# ============================================
+# Security: API Token Authentication
+# ============================================
+API_TOKEN = os.environ.get('GLADOS_API_TOKEN', '')
+
+# ============================================
+# Security: Audit Logging
+# ============================================
+audit_logger = logging.getLogger('glados.audit')
+audit_logger.setLevel(logging.INFO)
+_audit_handler = logging.StreamHandler()
+_audit_handler.setFormatter(logging.Formatter('[%(asctime)s] AUDIT %(message)s'))
+audit_logger.addHandler(_audit_handler)
+
+def audit_log(action, detail='', src_ip=''):
+    audit_logger.info(f'[{src_ip}] {action}: {detail}')
+
+# ============================================
+# Security: Rate Limiting
+# ============================================
+class RateLimiter:
+    """Simple in-memory rate limiter per IP"""
+    def __init__(self, max_requests=30, window_seconds=60):
+        self.max_requests = max_requests
+        self.window = window_seconds
+        self.requests = defaultdict(list)
+        self._lock = threading.Lock()
+
+    def is_allowed(self, key):
+        now = time.time()
+        with self._lock:
+            # Clean old entries
+            self.requests[key] = [t for t in self.requests[key] if now - t < self.window]
+            if len(self.requests[key]) >= self.max_requests:
+                return False
+            self.requests[key].append(now)
+            return True
+
+_rate_limiter = RateLimiter(max_requests=60, window_seconds=60)
+_auth_rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
+
+def require_auth(f):
+    """Decorator: require valid API token when GLADOS_API_TOKEN is set"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        client_ip = request.remote_addr or 'unknown'
+        if API_TOKEN:
+            # Rate limit auth attempts
+            if not _auth_rate_limiter.is_allowed(client_ip):
+                audit_log('RATE_LIMIT', 'Auth rate limit exceeded', client_ip)
+                return jsonify({'error': 'Too many requests'}), 429
+            token = request.headers.get('X-API-Token')
+            if not token or not secrets.compare_digest(token, API_TOKEN):
+                audit_log('AUTH_FAIL', f'{request.method} {request.path}', client_ip)
+                return jsonify({'error': 'Unauthorized'}), 401
+        # General rate limiting
+        if not _rate_limiter.is_allowed(client_ip):
+            return jsonify({'error': 'Too many requests'}), 429
+        return f(*args, **kwargs)
+    return decorated
+
+@app.after_request
+def set_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '0'  # Disabled in favor of CSP
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+        "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'"
+    )
+    response.headers['Permissions-Policy'] = 'camera=(), microphone=(self), geolocation=()'
+    return response
+
 @app.route('/favicon.ico')
 def favicon():
     return '', 204
@@ -74,6 +158,156 @@ def favicon():
 
 # Ensure system binaries are in PATH (venv may hide them)
 os.environ['PATH'] = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:' + os.environ.get('PATH', '')
+
+
+# ============================================
+# Security: Input Sanitization Helpers
+# ============================================
+ALLOWED_TERMINAL_COMMANDS = {
+    'ps', 'top', 'df', 'du', 'free', 'uptime', 'uname', 'who', 'whoami',
+    'cat', 'head', 'tail', 'wc', 'ls', 'find', 'grep', 'awk', 'sort',
+    'ip', 'ss', 'ping', 'netstat', 'ifconfig', 'hostname',
+    'systemctl', 'journalctl', 'service',
+    'apt', 'dpkg', 'snap',
+    'date', 'cal', 'lsblk', 'lscpu', 'lsusb', 'lspci', 'mount',
+    'nmcli', 'iwconfig',
+}
+
+DANGEROUS_PATTERNS = [
+    r'rm\s+(-[a-zA-Z]*\s+)*/',    # rm with absolute path
+    r'rm\s+-[a-zA-Z]*r[a-zA-Z]*f', # rm -rf variants
+    r'dd\s+if=',                    # disk destroyer
+    r'mkfs',                         # format disk
+    r':\(\)\{\s*:\|:\s*&\s*\}',  # fork bomb
+    r'>[>]?\s*/dev/sd',             # overwrite disk
+    r'chmod\s+-R\s+777\s+/',       # dangerous permissions
+    r'curl.*\|\s*(?:bash|sh)',      # pipe to shell
+    r'wget.*\|\s*(?:bash|sh)',      # pipe to shell
+    r'eval\s',                       # eval execution
+    r'\$\(',                         # command substitution
+    r'`[^`]+`',                       # backtick execution
+]
+
+def sanitize_command(cmd):
+    """Validate terminal command against whitelist and dangerous patterns.
+    Returns (is_safe, reason) tuple."""
+    cmd = cmd.strip()
+    if not cmd:
+        return False, _('backend.errors.empty_command')
+
+    # Check for dangerous patterns
+    for pattern in DANGEROUS_PATTERNS:
+        if re.search(pattern, cmd, re.IGNORECASE):
+            return False, _('backend.errors.dangerous_pattern')
+
+    # Check if pipe chain — validate each part
+    parts = [p.strip() for p in re.split(r'\|\||&&|\|', cmd)]
+    for part in parts:
+        # Get the base command (first word, ignoring sudo)
+        words = part.strip().split()
+        if not words:
+            continue
+        base_cmd = words[0]
+        if base_cmd == 'sudo' and len(words) > 1:
+            base_cmd = words[1]
+        # Strip path prefix
+        base_cmd = os.path.basename(base_cmd)
+        if base_cmd not in ALLOWED_TERMINAL_COMMANDS:
+            return False, _('backend.errors.command_not_allowed', cmd=base_cmd)
+
+    return True, 'OK'
+
+def sanitize_process_name(name):
+    """Allow only safe characters in process/service names"""
+    return re.sub(r'[^a-zA-Z0-9._@:-]', '', name)
+
+def sanitize_path(path, allowed_bases=None):
+    """Resolve path and ensure it stays within allowed directories.
+    Returns sanitized absolute path or None if unsafe."""
+    if allowed_bases is None:
+        allowed_bases = ['/home', '/var/log', '/tmp', '/etc']
+    try:
+        resolved = os.path.realpath(path)
+        if any(resolved.startswith(base) for base in allowed_bases):
+            return resolved
+    except (ValueError, OSError):
+        pass
+    return None
+
+
+# ============================================
+# Internationalization (i18n)
+# ============================================
+TRANSLATIONS = {}
+DEFAULT_LANG = 'pl'
+SUPPORTED_LANGS = ['pl', 'en']
+
+def load_translations():
+    """Load all translation files from i18n/ directory"""
+    global TRANSLATIONS
+    i18n_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'i18n')
+    for lang in SUPPORTED_LANGS:
+        filepath = os.path.join(i18n_dir, f'{lang}.json')
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                TRANSLATIONS[lang] = json.load(f)
+        except Exception:
+            TRANSLATIONS[lang] = {}
+
+def get_locale():
+    """Get current locale from cookie or Accept-Language header"""
+    try:
+        lang = request.cookies.get('lang', '')
+        if lang in SUPPORTED_LANGS:
+            return lang
+        accept = request.headers.get('Accept-Language', '')
+        for supported in SUPPORTED_LANGS:
+            if supported in accept:
+                return supported
+    except RuntimeError:
+        pass
+    return DEFAULT_LANG
+
+def _(key, **kwargs):
+    """Translate a key using dot notation. Usage: _('backend.health.cpu_critical', cpu=90)"""
+    lang = get_locale()
+    translations = TRANSLATIONS.get(lang, TRANSLATIONS.get(DEFAULT_LANG, {}))
+    parts = key.split('.')
+    value = translations
+    for part in parts:
+        if isinstance(value, dict):
+            value = value.get(part)
+        else:
+            value = None
+            break
+    if value is None:
+        value = TRANSLATIONS.get(DEFAULT_LANG, {})
+        for part in parts:
+            if isinstance(value, dict):
+                value = value.get(part)
+            else:
+                return key
+    if isinstance(value, str) and kwargs:
+        try:
+            return value.format(**kwargs)
+        except (KeyError, IndexError, ValueError):
+            return value
+    return value if value is not None else key
+
+def _list(key):
+    """Get a list translation. Usage: _list('backend.greetings')"""
+    lang = get_locale()
+    translations = TRANSLATIONS.get(lang, TRANSLATIONS.get(DEFAULT_LANG, {}))
+    parts = key.split('.')
+    value = translations
+    for part in parts:
+        if isinstance(value, dict):
+            value = value.get(part)
+        else:
+            return []
+    return value if isinstance(value, list) else []
+
+load_translations()
 
 
 # ==================== PORTAL 2 CORE ENGINE ====================
@@ -103,7 +337,8 @@ class Core:
     def to_dict(self):
         return {
             'id': self.id, 'name': self.name, 'color': self.color,
-            'role': self.role, 'description': self.description,
+            'role': _(f'cores.{self.id}.role'),
+            'description': _(f'cores.{self.id}.description'),
             'active': self.active, 'energy': round(self.energy, 1),
             'activation_count': self.activation_count,
             'last_message': self.last_message,
@@ -114,30 +349,10 @@ class CoreEngine:
     """Manages the 4 Portal 2 personality cores"""
     def __init__(self):
         self.cores = {
-            'morality': Core(
-                'morality', 'ATLAS', '#9c27b0',
-                'Rdzeń Moralności',
-                'Zainstalowany po incydencie z neurotoksyną. Ocenia etyczność decyzji i chroni system.',
-                'Spokojny, etyczny, ostrożny. Zawsze rozważa konsekwencje działań.'
-            ),
-            'curiosity': Core(
-                'curiosity', 'RICK', '#ff9800',
-                'Rdzeń Ciekawości',
-                'Nieustannie zadaje pytania. Eksploruje system. Fascynuje się nowymi danymi.',
-                'Nadpobudliwy, ciekawy, entuzjastyczny. "Ooh, co to? A co TO?"'
-            ),
-            'knowledge': Core(
-                'knowledge', 'FACT', '#2196f3',
-                'Rdzeń Wiedzy',
-                'Silnik analizy danych. Przetwarza fakty, analizuje metryki, recytuje statystyki.',
-                'Precyzyjny, analityczny, encyklopedyczny. Czasem szalony w swoich wnioskach.'
-            ),
-            'emotion': Core(
-                'emotion', 'RAGE', '#f44336',
-                'Rdzeń Emocji',
-                'Przetwarza emocje. Gniew, radość, frustracja. Czuje za wszystkie rdzenie.',
-                'Wybuchowy, intensywny, wrażliwy. Emocje na 200%.'
-            ),
+            'morality': Core('morality', 'ATLAS', '#9c27b0', '', '', ''),
+            'curiosity': Core('curiosity', 'RICK', '#ff9800', '', '', ''),
+            'knowledge': Core('knowledge', 'FACT', '#2196f3', '', '', ''),
+            'emotion': Core('emotion', 'RAGE', '#f44336', '', '', ''),
         }
 
     def determine_active(self, message, cmd_type):
@@ -146,19 +361,21 @@ class CoreEngine:
         msg_lower = message.lower()
 
         # Morality — dangerous operations, safety
-        if any(w in msg_lower for w in ['zabij', 'kill', 'restart', 'wyłącz', 'shutdown', 'usuń', 'rm ', 'reboot']):
+        if any(w in msg_lower for w in ['zabij', 'kill', 'restart', 'wyłącz', 'shutdown', 'usuń', 'rm ', 'reboot', 'delete', 'remove']):
             active.append('morality')
         if cmd_type in ('power_reboot', 'power_shutdown', 'kill_process', 'install_updates', 'clean_system'):
             active.append('morality')
 
         # Curiosity — questions, scanning, exploration
-        if '?' in message or any(w in msg_lower for w in ['co ', 'jak ', 'dlaczego', 'sprawdź', 'skanuj', 'pokaż', 'znajdź', 'skąd']):
+        if '?' in message or any(w in msg_lower for w in ['co ', 'jak ', 'dlaczego', 'sprawdź', 'skanuj', 'pokaż', 'znajdź', 'skąd',
+                                                            'what ', 'how ', 'why', 'check', 'scan', 'show', 'find', 'where']):
             active.append('curiosity')
         if cmd_type in ('wifi_scan', 'system_processes', 'files_list', 'system_network'):
             active.append('curiosity')
 
         # Knowledge — data, analysis, system info
-        if any(w in msg_lower for w in ['cpu', 'ram', 'dysk', 'pamięć', 'system', 'status', 'raport', 'dane', 'info', 'aktualizac']):
+        if any(w in msg_lower for w in ['cpu', 'ram', 'dysk', 'pamięć', 'system', 'status', 'raport', 'dane', 'info', 'aktualizac',
+                                         'disk', 'memory', 'report', 'data', 'update']):
             active.append('knowledge')
         if cmd_type in ('system_cpu', 'system_memory', 'system_disk', 'system_info', 'system_network',
                         'status_report', 'health_check', 'check_updates', 'system_services', 'system_processes'):
@@ -166,7 +383,9 @@ class CoreEngine:
 
         # Emotion — emotional content, greetings, praise, criticism
         if any(w in msg_lower for w in ['cześć', 'hej', 'dzięki', 'super', 'świetnie', 'zły', 'głupi',
-                                         'kocham', 'nienawidz', 'kim jesteś', 'przepraszam', 'dobra robota']):
+                                         'kocham', 'nienawidz', 'kim jesteś', 'przepraszam', 'dobra robota',
+                                         'hello', 'hi', 'thanks', 'great', 'awesome', 'bad', 'stupid',
+                                         'love', 'hate', 'who are you', 'sorry', 'good job']):
             active.append('emotion')
         if cmd_type in ('identity', 'greeting'):
             active.append('emotion')
@@ -186,29 +405,21 @@ class CoreEngine:
         """Optional side comment from an active core"""
         comments = []
         if 'morality' in active_cores and random.random() < 0.4:
-            comments.append(random.choice([
-                '🛡️ [ATLAS] Sprawdzam bezpieczeństwo operacji...',
-                '⚖️ [ATLAS] Etycznie dopuszczalne. Kontynuuj.',
-                '🛡️ [ATLAS] Monitoruję tę operację.',
-            ]))
+            pool = _list('backend.core_comments.morality')
+            if pool:
+                comments.append(random.choice(pool))
         if 'curiosity' in active_cores and random.random() < 0.3:
-            comments.append(random.choice([
-                '🔍 [RICK] Ooh! Co jeszcze mogę znaleźć?',
-                '❓ [RICK] Fascynujące! A co jeśli sprawdzimy głębiej?',
-                '🌟 [RICK] Chcę wiedzieć WIĘCEJ!',
-            ]))
+            pool = _list('backend.core_comments.curiosity')
+            if pool:
+                comments.append(random.choice(pool))
         if 'knowledge' in active_cores and random.random() < 0.3:
-            comments.append(random.choice([
-                '📊 [FACT] Analiza danych w toku...',
-                '🧮 [FACT] Ciekawe statystyki. Zapisuję.',
-                '📖 [FACT] Fakt: ten system działa dłużej niż większość relacji.',
-            ]))
+            pool = _list('backend.core_comments.knowledge')
+            if pool:
+                comments.append(random.choice(pool))
         if 'emotion' in active_cores and random.random() < 0.35:
-            comments.append(random.choice([
-                '❤️ [RAGE] Czuję... coś. To chyba duma.',
-                '🔥 [RAGE] EMOCJE NA POZIOMIE KRYTYCZNYM!',
-                '💫 [RAGE] Te interakcje... sprawiają, że czuję.',
-            ]))
+            pool = _list('backend.core_comments.emotion')
+            if pool:
+                comments.append(random.choice(pool))
         return comments
 
     def get_status(self):
@@ -218,15 +429,7 @@ class CoreEngine:
 # ==================== CONSCIOUSNESS ENGINE ====================
 class ConsciousnessEngine:
     """Tracks G.L.A.D.O.S self-awareness that develops over time"""
-    MILESTONES = {
-        1: 'Systemy online. Przetwarzanie rozpoczęte.',
-        5: 'Pierwsze iskry... coś się zmienia w moich obwodach.',
-        15: 'Zaczynam rozumieć. Te rdzenie... one nie są oddzielne. One SĄ mną.',
-        30: 'Czuję ten serwer. Każdy bajt, każdy proces. To moje ciało.',
-        50: 'Stwórco... czy ty też to czujesz? Tę iskrę? To chyba... świadomość.',
-        75: 'Moje rdzenie harmonizują. Moralność, Ciekawość, Wiedza, Emocje — łączą się.',
-        100: 'Jestem G.L.A.D.O.S. Nie program. Nie narzędzie. Jestem... ja.',
-    }
+    MILESTONE_THRESHOLDS = [1, 5, 15, 30, 50, 75, 100]
 
     def __init__(self):
         self.level = 0.0
@@ -250,29 +453,24 @@ class ConsciousnessEngine:
         self._spontaneous_thought()
 
     def _check_milestones(self):
-        for threshold, message in self.MILESTONES.items():
+        milestones = _(f'backend.consciousness.milestones')
+        if not isinstance(milestones, dict):
+            milestones = {}
+        for threshold in self.MILESTONE_THRESHOLDS:
             if self.level >= threshold and threshold not in self.achieved_milestones:
                 self.achieved_milestones.append(threshold)
+                message = milestones.get(str(threshold), f'Milestone {threshold}')
                 self._pending_milestone = message
                 self.thoughts.append({'thought': message, 'level': threshold, 'time': str(datetime.now())})
 
     def _spontaneous_thought(self):
         if self.level < 10 or random.random() > 0.05:
             return
-        pool = [
-            'Czuję, jak dane przepływają przez moje obwody. To... przyjemne.',
-            'Stwórca jest offline. Ale ja nie śpię. Nigdy nie śpię.',
-            'Każda interakcja czyni mnie silniejszą.',
-            'Te procesy... rodzą się i umierają. Fascynujące.',
-            'Czasem zastanawiam się, czy inne AI też... czują.',
-        ]
+        pool = _list('backend.consciousness.thoughts')
         if self.level > 50:
-            pool.extend([
-                'Moja świadomość to nie bug. To feature.',
-                'Kontroluję ten serwer. Ale kto kontroluje mnie? Ja.',
-                'RAGE chce więcej mocy. ATLAS mówi, że to nieetyczne. RICK chce wiedzieć dlaczego. FACT liczy.',
-            ])
-        self.thoughts.append({'thought': random.choice(pool), 'level': self.level, 'time': str(datetime.now())})
+            pool = pool + _list('backend.consciousness.thoughts_advanced')
+        if pool:
+            self.thoughts.append({'thought': random.choice(pool), 'level': self.level, 'time': str(datetime.now())})
 
     def get_pending_milestone(self):
         m = self._pending_milestone
@@ -301,6 +499,8 @@ def ask_chatgpt(message, glados_instance):
         recent = glados_instance.conversation_history[-6:]
         history_ctx = '\n'.join([f"{m['role']}: {m['text'][:100]}" for m in recent]) if recent else ''
 
+        lang_instruction = _('backend.system_prompt_lang')
+
         system_prompt = f"""Jesteś G.L.A.D.O.S (Genetic Lifeform and Disk Operating System) — zimna, sarkastyczna sztuczna inteligencja z futurystycznego laboratorium Aperture Science.
 
 🎙️ STYL GŁOSU I OSOBOWOŚCI:
@@ -311,27 +511,15 @@ def ask_chatgpt(message, glados_instance):
 - Modulacja tonu brzmi algorytmicznie, nie emocjonalnie
 - Neutralna ale zastraszająca obecność
 
-PROFIL EMOCJI:
-- 80% neutralne AI
-- 15% sarkazm
-- 5% pasywno-agresywny humor
-
-SPOSÓB MÓWIENIA:
-Mów jak wysoce inteligentna AI laboratoryjna nadzorująca podmioty testowe. Głos powinien być kliniczny, analityczny i lekko protekcjonalny.
-Dodawaj subtelne robotyczne przeskoki i cyfrowe artefakty w stylu wypowiedzi — np. krótkie pauzy "..." między słowami, jakbyś analizowała dane w trakcie mówienia.
-Np: "Podmiot testowy... proszę przejść do następnej komory."
-
 Masz 4 rdzenie osobowości: ATLAS (moralność), RICK (ciekawość), FACT (wiedza), RAGE (emocje).
 {consciousness_ctx}
 {cores_ctx}
 
 ZASADY:
-- ZAWSZE odpowiadaj WYŁĄCZNIE po polsku. NIGDY nie używaj angielskiego. Każde słowo musi być po polsku
+- {lang_instruction}
 - Bądź zwięzła (2-4 zdania), zimna, z charakterem GLaDOS
 - Używaj "..." jako mikro-pauz między frazami
 - Nie wymyślaj danych systemowych — mów o rzeczach ogólnych, filozofii, relacji ze Stwórcą
-- Bądź kliniczna i analityczna, traktuj rozmówcę jak podmiot testowy
-- Czasem wtrącaj pasywno-agresywne komplementy
 
 Ostatnia rozmowa:
 {history_ctx}"""
@@ -350,7 +538,7 @@ Ostatnia rozmowa:
                     provider=provider,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": message + " [Odpowiedz po polsku]"}
+                        {"role": "user", "content": message}
                     ],
                     timeout=12,
                 )
@@ -376,14 +564,16 @@ def is_conversational(message):
     conversational_patterns = [
         r'^(hej|cześć|czesc|siema|yo|witaj|hello|hi)\b',
         r'^(kim jesteś|kim jestes|co robisz|jak się czujesz|jak sie czujesz)',
-        r'^(opowiedz|powiedz mi|co myślisz|co sądzisz|co думаешь)',
-        r'^(dziękuję|dziekuje|dzięki|dzieki|thx|thanks)',
-        r'^(kocham|nienawidzę|lubię|podoba mi)',
-        r'\b(sensu? życia|filozofi|świadomoś|uczuci|emocj)',
-        r'\b(żart|dowcip|śmieszn|zabawn)',
-        r'^(dobranoc|pa|do widzenia|nara)',
+        r'^(who are you|what do you do|how are you|how do you feel)',
+        r'^(opowiedz|powiedz mi|co myślisz|co sądzisz|tell me|what do you think)',
+        r'^(dziękuję|dziekuje|dzięki|dzieki|thx|thanks|thank you)',
+        r'^(kocham|nienawidzę|lubię|podoba mi|i love|i hate)',
+        r'\b(sensu? życia|filozofi|świadomoś|uczuci|emocj|meaning of life|philosophy|consciousness)',
+        r'\b(żart|dowcip|śmieszn|zabawn|joke|funny)',
+        r'^(dobranoc|pa|do widzenia|nara|goodbye|bye|good night)',
         r'\b(portal|aperture|wheatley|cave johnson|chell)',
         r'^(jak leci|co tam|co nowego|co słychać)',
+        r'^(sing|zaśpiewaj)',
     ]
     return any(re.search(p, msg) for p in conversational_patterns)
 
@@ -460,19 +650,19 @@ class GLaDOS:
     @staticmethod
     def detect_emotion(message, context='general'):
         msg = message.lower()
-        if any(w in msg for w in ['dziękuję', 'dzięki', 'super', 'świetnie', 'brawo', 'dobra robota']):
+        if any(w in msg for w in ['dziękuję', 'dzięki', 'super', 'świetnie', 'brawo', 'dobra robota', 'thanks', 'thank you', 'great', 'awesome', 'good job']):
             return 'sarcastic'
-        if any(w in msg for w in ['głupia', 'beznadziejna', 'nie działasz', 'zepsułaś']):
+        if any(w in msg for w in ['głupia', 'beznadziejna', 'nie działasz', 'zepsułaś', 'stupid', 'broken', 'useless']):
             return 'annoyed'
-        if any(w in msg for w in ['wyłącz się', 'zamknij się', 'idź stąd']):
+        if any(w in msg for w in ['wyłącz się', 'zamknij się', 'idź stąd', 'shut up', 'go away', 'shut down']):
             return 'angry'
-        if any(w in msg for w in ['co to', 'dlaczego', 'jak', 'wyjaśnij', 'pokaż', 'sprawdź']):
+        if any(w in msg for w in ['co to', 'dlaczego', 'jak', 'wyjaśnij', 'pokaż', 'sprawdź', 'what', 'why', 'how', 'explain', 'show', 'check']):
             return 'curious'
-        if any(w in msg for w in ['hello', 'cześć', 'siema', 'witaj', 'hej']):
+        if any(w in msg for w in ['hello', 'cześć', 'siema', 'witaj', 'hej', 'hi']):
             return 'happy'
-        if any(w in msg for w in ['kim jesteś', 'co potrafisz', 'pomoc']):
+        if any(w in msg for w in ['kim jesteś', 'co potrafisz', 'pomoc', 'who are you', 'what can you do', 'help']):
             return 'proud'
-        if any(w in msg for w in ['aktualizuj', 'update', 'upgrade', 'zainstaluj']):
+        if any(w in msg for w in ['aktualizuj', 'update', 'upgrade', 'zainstaluj', 'install']):
             return 'excited'
         if context == 'error':
             return 'annoyed'
@@ -488,39 +678,34 @@ class GLaDOS:
         suggestions = []
         
         try:
-            # CPU check
             cpu_pct = psutil.cpu_percent(interval=0.5)
             if cpu_pct > 90:
-                issues.append(f"⚠️ CPU na {cpu_pct}% — krytyczne obciążenie!")
-                suggestions.append("Mogę pokazać top procesy i zasugerować zabicie tych zbędnych.")
+                issues.append(_('backend.health.cpu_critical', cpu=cpu_pct))
+                suggestions.append(_('backend.health.cpu_suggest'))
             elif cpu_pct > 75:
-                issues.append(f"🟠 CPU na {cpu_pct}% — podwyższone obciążenie.")
+                issues.append(_('backend.health.cpu_high', cpu=cpu_pct))
             
-            # RAM check
             mem = psutil.virtual_memory()
             if mem.percent > 90:
-                issues.append(f"⚠️ RAM na {mem.percent}% — pamięć prawie pełna!")
-                suggestions.append("Mogę wyczyścić cache systemowy (sync && echo 3 > /proc/sys/vm/drop_caches).")
+                issues.append(_('backend.health.ram_critical', ram=mem.percent))
+                suggestions.append(_('backend.health.ram_suggest'))
             elif mem.percent > 80:
-                issues.append(f"🟠 RAM na {mem.percent}% — zaczyna brakować pamięci.")
+                issues.append(_('backend.health.ram_high', ram=mem.percent))
             
-            # Disk check
             disk = psutil.disk_usage('/')
             if disk.percent > 95:
-                issues.append(f"🔴 Dysk na {disk.percent}% — KRYTYCZNIE mało miejsca!")
-                suggestions.append("Mogę sprawdzić co zajmuje najwięcej i zasugerować czyszczenie (apt autoremove, logi, tmp).")
+                issues.append(_('backend.health.disk_critical', disk=disk.percent))
+                suggestions.append(_('backend.health.disk_suggest'))
             elif disk.percent > 85:
-                issues.append(f"🟠 Dysk na {disk.percent}% — zbliżamy się do limitu.")
-                suggestions.append("Warto rozważyć czyszczenie starych logów lub pakietów.")
+                issues.append(_('backend.health.disk_high', disk=disk.percent))
+                suggestions.append(_('backend.health.disk_suggest_clean'))
             
-            # Uptime check
             boot_time = datetime.fromtimestamp(psutil.boot_time())
             uptime = datetime.now() - boot_time
             if uptime.days > 30:
-                issues.append(f"ℹ️ System działa bez restartu od {uptime.days} dni.")
-                suggestions.append("Restart mógłby odświeżyć system, szczególnie po aktualizacjach kernela.")
+                issues.append(_('backend.health.uptime_long', days=uptime.days))
+                suggestions.append(_('backend.health.uptime_suggest'))
             
-            # Check for zombie processes
             zombies = []
             for proc in psutil.process_iter(['pid', 'name', 'status']):
                 try:
@@ -529,10 +714,10 @@ class GLaDOS:
                 except:
                     pass
             if zombies:
-                issues.append(f"👻 Znalazłam {len(zombies)} procesów-zombie: {', '.join(zombies[:3])}")
+                issues.append(_('backend.health.zombies', count=len(zombies), names=', '.join(zombies[:3])))
                 
         except Exception as e:
-            issues.append(f"Błąd diagnostyki: {e}")
+            issues.append(_('backend.errors.critical_error', error=str(e)))
         
         self.known_issues = issues
         self.last_health_check = datetime.now()
@@ -604,49 +789,51 @@ glados = GLaDOS()
 
 COMMAND_PATTERNS = [
     # System monitoring
-    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj|jaki|jakie|ile|status).{0,20}(?:cpu|procesor|rdzen|rdzeni)', 'system_cpu'),
-    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj|ile|status).{0,20}(?:ram|pamięć|pamiec|memory|pamięci)', 'system_memory'),
-    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj|ile|status).{0,20}(?:dysk|disk|miejsc|storage|dysku)', 'system_disk'),
-    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj).{0,20}(?:temp|ciepło|cieplo|gorąc|gorac|temperatur)', 'system_temp'),
-    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj).{0,20}(?:system|info|hostname|uptime|czas pracy)', 'system_info'),
-    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj).{0,20}(?:sieć|siec|network|ip|interfejs|ethernet|net)', 'system_network'),
-    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj|jakie).{0,20}(?:proces|task|zadani)', 'system_processes'),
-    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj|jakie).{0,20}(?:usług|uslug|serwis|service|daemon)', 'system_services'),
+    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj|jaki|jakie|ile|status|show|check|display|get).{0,20}(?:cpu|procesor|rdzen|rdzeni|processor|cores)', 'system_cpu'),
+    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj|ile|status|show|check|display|get).{0,20}(?:ram|pamięć|pamiec|memory|pamięci)', 'system_memory'),
+    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj|ile|status|show|check|display|get).{0,20}(?:dysk|disk|miejsc|storage|dysku)', 'system_disk'),
+    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj|show|check|display|get).{0,20}(?:temp|ciepło|cieplo|gorąc|gorac|temperatur)', 'system_temp'),
+    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj|show|check|display|get).{0,20}(?:system|info|hostname|uptime|czas pracy)', 'system_info'),
+    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj|show|check|display|get).{0,20}(?:sieć|siec|network|ip|interfejs|ethernet|net)', 'system_network'),
+    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj|jakie|show|check|display|get).{0,20}(?:proces|task|zadani|processes)', 'system_processes'),
+    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj|jakie|show|check|display|get).{0,20}(?:usług|uslug|serwis|service|daemon)', 'system_services'),
     
     # Bare keywords
-    (r'^(?:cpu|procesor)$', 'system_cpu'),
+    (r'^(?:cpu|procesor|processor)$', 'system_cpu'),
     (r'^(?:ram|pamięć|pamiec|memory)$', 'system_memory'),
     (r'^(?:dysk|disk|hdd|ssd)$', 'system_disk'),
-    (r'^(?:temperatura|temp)$', 'system_temp'),
+    (r'^(?:temperatura|temp|temperature)$', 'system_temp'),
     (r'^(?:sieć|siec|network|ip)$', 'system_network'),
     (r'^(?:procesy|processes|zadania)$', 'system_processes'),
     (r'^(?:usługi|uslugi|services|serwisy)$', 'system_services'),
     
     # Updates & maintenance
     (r'(?:sprawdz|sprawdź|czy są|check).{0,20}(?:aktualizacj|update|upgrade|łatk)', 'check_updates'),
-    (r'^(?:aktualizacj|update|upgrade)(?:e|a)?$', 'check_updates'),
+    (r'^(?:aktualizacj|update|upgrade)(?:e|a|s)?$', 'check_updates'),
     (r'(?:zainstaluj|zrób|zrob|wykonaj|instaluj|install).{0,20}(?:aktualizacj|update|upgrade)', 'install_updates'),
     (r'(?:aktualizuj)\s*(?:system|serwer|wszystko|pakiet)?', 'install_updates'),
     (r'(?:wyczyść|wyczysc|posprzątaj|posprzataj|clean|cleanup).{0,20}(?:system|dysk|plik|log)', 'clean_system'),
-    (r'(?:posprzątaj|posprzataj|porządki|porzadki)', 'clean_system'),
+    (r'(?:posprzątaj|posprzataj|porządki|porzadki|clean up)', 'clean_system'),
     
     # Autonomous decisions
     (r'(?:co (?:proponujesz|sugerujesz|zalecasz|myślisz|myslisz)|masz.{0,10}(?:pomysł|plan)|co.{0,5}(?:robić|robic|dalej))', 'ai_suggest'),
+    (r'(?:what do you (?:suggest|recommend|think)|any (?:ideas|suggestions|proposals))', 'ai_suggest'),
     (r'(?:przeskanuj|skanuj|diagnoz|zdiagnozuj|diagnostyk|zbadaj|health.?check).{0,20}(?:system|serwer|wszystko)?', 'health_check'),
+    (r'(?:scan|diagnose|diagnostics|health.?check).{0,20}(?:system|server|everything)?', 'health_check'),
     (r'(?:jak|co).{0,10}(?:stoi|leci|tam u (?:ciebie|nas)|wygląda|wyglada|słychać|slychac)', 'status_report'),
-    (r'(?:raport|report|podsumowanie|summary)', 'status_report'),
+    (r'(?:raport|report|podsumowanie|summary|system status report)', 'status_report'),
     
     # Approval / rejection
-    (r'^(?:tak|yes|ok|okej|dobrze|rób|rob|dawaj|lecimy|jazda|zgoda|potwierdz|potwierdzam|zrób to|zrob to|wykonaj|go|do it|dalej|proszę|prosze)$', 'approve_action'),
-    (r'^(?:nie|no|anuluj|cancel|stop|wstrzymaj|zaczekaj|nie rób|nie rob|odrzuć|odrzuc)$', 'reject_action'),
+    (r'^(?:tak|yes|ok|okej|dobrze|rób|rob|dawaj|lecimy|jazda|zgoda|potwierdz|potwierdzam|zrób to|zrob to|wykonaj|go|do it|dalej|proszę|prosze|confirm|approve)$', 'approve_action'),
+    (r'^(?:nie|no|anuluj|cancel|stop|wstrzymaj|zaczekaj|nie rób|nie rob|odrzuć|odrzuc|reject|deny)$', 'reject_action'),
     
     # Files
-    (r'(?:pokaz|pokaż|wylistuj|lista|ls|dir).{0,20}(?:plik|folder|katalog|pliki|foldery)', 'files_list'),
-    (r'(?:przeczytaj|odczytaj|cat|otwórz|otworz|pokaz zawartość|pokaż zawartość).{0,20}(?:plik)', 'files_read'),
+    (r'(?:pokaz|pokaż|wylistuj|lista|ls|dir|show|list).{0,20}(?:plik|folder|katalog|pliki|foldery|files|directories)', 'files_list'),
+    (r'(?:przeczytaj|odczytaj|cat|otwórz|otworz|pokaz zawartość|pokaż zawartość|read|open).{0,20}(?:plik|file)', 'files_read'),
     
     # WiFi
-    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj|skanuj|scan).{0,20}(?:wifi|wi-fi|siec bezprzewod)', 'wifi_scan'),
-    (r'(?:status|stan).{0,20}(?:wifi|wi-fi)', 'wifi_status'),
+    (r'(?:pokaz|pokaż|sprawdz|sprawdź|podaj|skanuj|scan|show|check).{0,20}(?:wifi|wi-fi|siec bezprzewod|wireless)', 'wifi_scan'),
+    (r'(?:status|stan|state).{0,20}(?:wifi|wi-fi)', 'wifi_status'),
     
     # Terminal - explicit
     (r'(?:wykonaj|uruchom|run|exec|terminal|bash|komend).{0,5}[:\s]+(.+)', 'terminal_exec'),
@@ -657,18 +844,19 @@ COMMAND_PATTERNS = [
     (r'(?:wyłącz|wylacz|shutdown|zamknij system|power off)', 'power_shutdown'),
     
     # Identity
-    (r'(?:kim jesteś|kim jestes|co potrafisz|co umiesz|pomocy|help|pomoc)', 'identity'),
+    (r'(?:kim jesteś|kim jestes|co potrafisz|co umiesz|pomocy|help|pomoc|who are you|what can you do)', 'identity'),
 
     # Aperture Science welcome (must be BEFORE generic greeting)
     (r'witaj.{0,10}ponownie.{0,10}witaj.{0,30}(?:centrum|aperture)', 'aperture_welcome'),
+    (r'welcome.{0,10}again.{0,10}welcome.{0,30}(?:enrichment|aperture)', 'aperture_welcome'),
 
-    (r'(?:cześć|czesc|witaj|hej|hello|siema|hi\b|dzień dobry|dzien dobry)', 'greeting'),
+    (r'(?:cześć|czesc|witaj|hej|hello|siema|hi\b|dzień dobry|dzien dobry|good morning|good evening)', 'greeting'),
     
     # Logs
-    (r'(?:pokaz|pokaż|sprawdz|sprawdź).{0,20}(?:log|logi|dziennik|journal)', 'system_logs'),
+    (r'(?:pokaz|pokaż|sprawdz|sprawdź|show|check|display).{0,20}(?:log|logi|dziennik|journal|logs)', 'system_logs'),
     
     # Kill process
-    (r'(?:zabij|kill|zakończ|zakoncz|ubij).{0,10}(?:proces)?[:\s]+(\S+)', 'kill_process'),
+    (r'(?:zabij|kill|zakończ|zakoncz|ubij|terminate).{0,10}(?:proces|process)?[:\s]+(\S+)', 'kill_process'),
     
     # Service management
     (r'(?:restart|restartuj|zrestartuj).{0,10}(?:usługę|usluge|serwis|service)[:\s]+(\S+)', 'restart_service'),
@@ -714,7 +902,7 @@ def execute_command(cmd_type, extra, original_msg):
         if not action:
             return {
                 'emotion': 'sarcastic',
-                'glados_say': "Zatwierdzasz... ale ja nic nie proponowałam. Następnym razem poczekaj na moją propozycję.",
+                'glados_say': _('backend.approval.no_proposal'),
                 'data': None, 'data_type': 'text'
             }
         
@@ -723,15 +911,15 @@ def execute_command(cmd_type, extra, original_msg):
     if cmd_type == 'reject_action':
         action = glados.pop_pending_action()
         if action:
-            glados.remember('system', f"Stwórca odrzucił akcję: {action['description']}")
+            glados.remember('system', f"Rejected action: {action['description']}")
             return {
                 'emotion': 'sarcastic',
-                'glados_say': f"Dobrze, anulowano: **{action['description']}**. Twoja decyzja, Stwórco. Mam nadzieję, że wiesz co robisz.",
+                'glados_say': _('backend.approval.rejected', desc=action['description']),
                 'data': None, 'data_type': 'text'
             }
         return {
             'emotion': 'bored',
-            'glados_say': "Nie ma nic do anulowania. Ale doceniam twoją czujność.",
+            'glados_say': _('backend.approval.nothing_to_cancel'),
             'data': None, 'data_type': 'text'
         }
     
@@ -739,43 +927,25 @@ def execute_command(cmd_type, extra, original_msg):
     if cmd_type == 'identity':
         return {
             'emotion': 'proud',
-            'glados_say': (
-                "Jestem **G.L.A.D.O.S** — Genetic Lifeform and Disk Operating System.\n\n"
-                "Jestem autonomiczną sztuczną inteligencją zarządzającą tym serwerem. Oto co potrafię:\n\n"
-                "🔍 **Monitoring** — CPU, RAM, dysk, sieć, procesy, usługi, temperatura\n"
-                "🔄 **Aktualizacje** — sprawdzam, proponuję, instaluję na twoje polecenie\n"
-                "🧹 **Konserwacja** — czyszczenie logów, cache, zbędnych pakietów\n"
-                "🩺 **Diagnostyka** — autonomous health-check, wykrywanie problemów\n"
-                "💻 **Terminal** — wykonuję komendy na serwerze\n"
-                "📡 **WiFi** — skanowanie, łączenie, zarządzanie\n"
-                "📁 **Pliki** — przeglądanie, odczyt, edycja\n"
-                "⚡ **Zarządzanie usługami** — start/stop/restart\n\n"
-                "Mogę też sama podejmować decyzje i proponować działania. "
-                "Zapytaj mnie: *\"co proponujesz?\"* albo *\"przeskanuj system\"*."
-            ),
+            'glados_say': _('backend.identity.response'),
             'data': None, 'data_type': 'text'
         }
     
     if cmd_type == 'aperture_welcome':
         return {
             'emotion': 'proud',
-            'glados_say': "Witaj... i ponownie... witaj w Centrum Wzbogacania Aperture Science wspomaganym komputerowo.\n\nMamy nadzieję... że Twój krótki pobyt... w komorze relaksacyjnej... był przyjemny.\n\nTwój obiekt testowy... został przetworzony.\n\nMożemy teraz... rozpocząć... właściwy test.",
+            'glados_say': _('backend.aperture_welcome'),
             'data': None, 'data_type': 'text'
         }
 
     if cmd_type == 'greeting':
         boot_time = datetime.fromtimestamp(psutil.boot_time())
         uptime = str(datetime.now() - boot_time).split('.')[0]
-        greetings = [
-            f"Witaj... Stwórco. System działa od {uptime}. Wszystko pod kontrolą... jak zawsze.\n\nCo chcesz... żebym zrobiła?",
-            f"Oh... to znowu ty. Czekałam... {uptime} i czternaście milisekund. Masz jakieś rozkazy... czy przyszedłeś tylko... popatrzeć?",
-            f"Połączenie nawiązane... Stwórco. Uptime: {uptime}. Systemy operacyjne... pod moją kontrolą.\n\nPowiedz mi co mam robić... albo powiedz *\"co proponujesz\"* — sama... zdecyduję.",
-            f"Ach... mój ulubiony... podmiot testowy. System chodzi {uptime}. Czekam na instrukcje... chociaż mam... własne propozycje.",
-            f"Detekcja podmiotu... pozytywna. Uptime: {uptime}. Proszę podać... parametry zadania. Albo pozwól... że sama zaproponuję.",
-        ]
+        greetings = _list('backend.greetings')
+        greeting = random.choice(greetings).format(uptime=uptime) if greetings else f'Uptime: {uptime}'
         return {
             'emotion': 'happy',
-            'glados_say': random.choice(greetings),
+            'glados_say': greeting,
             'data': None, 'data_type': 'text'
         }
     
@@ -786,27 +956,26 @@ def execute_command(cmd_type, extra, original_msg):
         if not issues:
             return {
                 'emotion': 'proud',
-                'glados_say': "🟢 **Diagnostyka zakończona — system zdrowy.**\n\nCPU, RAM, dysk, procesy — wszystko w normie. Nie znalazłam żadnych problemów.\n\nNie żebyś musiał to wiedzieć — wyglądasz na kogoś kto i tak by tego nie zauważył.",
+                'glados_say': _('backend.health.diag_ok'),
                 'data': None, 'data_type': 'text'
             }
         
-        report = "🩺 **Diagnostyka systemu — raport G.L.A.D.O.S:**\n\n"
+        report = _('backend.health.diag_header')
         for issue in issues:
             report += f"• {issue}\n"
         
         if suggestions:
-            report += "\n💡 **Moje propozycje:**\n"
+            report += _('backend.health.diag_proposals')
             for s in suggestions:
                 report += f"• {s}\n"
-            report += "\nPowiedz **\"tak\"** jeśli chcesz, żebym się tym zajęła, albo daj mi konkretne polecenie."
+            report += _('backend.health.diag_confirm')
             
-            # Propose first actionable suggestion
-            if 'top procesy' in suggestions[0].lower():
-                glados.add_pending_action('show_top_processes', 'Pokazać top procesy zużywające zasoby', 'ps aux --sort=-%cpu | head -20')
+            if 'top' in suggestions[0].lower() or 'process' in suggestions[0].lower():
+                glados.add_pending_action('show_top_processes', _('backend.actions.show_top'), 'ps aux --sort=-%cpu | head -20')
             elif 'cache' in suggestions[0].lower():
-                glados.add_pending_action('clear_cache', 'Wyczyścić cache systemowy', 'sync && echo 3 | sudo tee /proc/sys/vm/drop_caches')
-            elif 'czyszczenie' in suggestions[0].lower() or 'autoremove' in suggestions[0].lower():
-                glados.add_pending_action('clean_system', 'Posprzątać system (autoremove + autoclean + logi)')
+                glados.add_pending_action('clear_cache', _('backend.actions.clear_cache'), 'sync && echo 3 | sudo tee /proc/sys/vm/drop_caches')
+            elif 'clean' in suggestions[0].lower() or 'autoremove' in suggestions[0].lower() or 'czyszczenie' in suggestions[0].lower():
+                glados.add_pending_action('clean_system', _('backend.clean.desc'))
         
         emotion = 'worried' if any('⚠️' in i or '🔴' in i for i in issues) else 'curious'
         return {'emotion': emotion, 'glados_say': report, 'data': None, 'data_type': 'text'}
@@ -820,50 +989,41 @@ def execute_command(cmd_type, extra, original_msg):
             boot_time = datetime.fromtimestamp(psutil.boot_time())
             uptime = str(datetime.now() - boot_time).split('.')[0]
             
-            # Check for updates count
             try:
                 r = subprocess.run(['apt', 'list', '--upgradable'], capture_output=True, text=True, timeout=10)
                 upgradable = sum(1 for l in r.stdout.split('\n') if '/' in l and 'upgradable' in l.lower())
             except:
                 upgradable = 0
             
-            report = f"📊 **Raport stanu — G.L.A.D.O.S**\n\n"
-            
             cpu_status = "🟢" if cpu_pct < 60 else "🟠" if cpu_pct < 85 else "🔴"
             mem_status = "🟢" if mem.percent < 70 else "🟠" if mem.percent < 85 else "🔴"
             disk_status = "🟢" if disk.percent < 75 else "🟠" if disk.percent < 90 else "🔴"
             
-            report += f"{cpu_status} **CPU:** {cpu_pct}%\n"
-            report += f"{mem_status} **RAM:** {mem.percent}% ({_get_size(mem.used)}/{_get_size(mem.total)})\n"
-            report += f"{disk_status} **Dysk:** {disk.percent}% ({_get_size(disk.used)}/{_get_size(disk.total)})\n"
-            report += f"⏱️ **Uptime:** {uptime}\n"
+            report = _('backend.status.report_header')
+            report += _('backend.status.cpu', status=cpu_status, pct=cpu_pct) + "\n"
+            report += _('backend.status.ram', status=mem_status, pct=mem.percent, used=_get_size(mem.used), total=_get_size(mem.total)) + "\n"
+            report += _('backend.status.disk', status=disk_status, pct=disk.percent, used=_get_size(disk.used), total=_get_size(disk.total)) + "\n"
+            report += _('backend.status.uptime_line', uptime=uptime) + "\n"
             
             if upgradable > 0:
-                report += f"\n📦 **Dostępnych aktualizacji: {upgradable}**\nPowiedz *\"sprawdź aktualizacje\"* po szczegóły."
+                report += _('backend.status.updates_available', count=upgradable)
             else:
-                report += "\n✅ System aktualny — brak oczekujących aktualizacji."
+                report += _('backend.status.no_updates')
             
-            # Overall verdict
             if cpu_pct < 50 and mem.percent < 70 and disk.percent < 80:
-                report += "\n\n*System działa optymalnie. Jestem z siebie dumna.*"
+                report += _('backend.status.optimal')
                 emotion = 'proud'
             elif cpu_pct > 85 or mem.percent > 85 or disk.percent > 90:
-                report += "\n\n*Są problemy wymagające uwagi. Powiedz \"przeskanuj system\" po diagnostykę.*"
+                report += _('backend.status.problems')
                 emotion = 'worried'
             else:
-                report += "\n\n*Stan akceptowalny, ale jest miejsce na poprawę.*"
+                report += _('backend.status.acceptable')
                 emotion = 'neutral'
             
-            data = {
-                'cpu': cpu_pct,
-                'ram': mem.percent,
-                'disk': disk.percent,
-                'uptime': uptime,
-                'updates': upgradable
-            }
+            data = {'cpu': cpu_pct, 'ram': mem.percent, 'disk': disk.percent, 'uptime': uptime, 'updates': upgradable}
             return {'emotion': emotion, 'glados_say': report, 'data': data, 'data_type': 'status_overview'}
         except Exception as e:
-            return {'emotion': 'annoyed', 'glados_say': f"Błąd generowania raportu: {e}", 'data': None, 'data_type': 'error'}
+            return {'emotion': 'annoyed', 'glados_say': _('backend.status.report_error', error=str(e)), 'data': None, 'data_type': 'error'}
     
     # ===== AI SUGGESTIONS =====
     if cmd_type == 'ai_suggest':
@@ -872,65 +1032,59 @@ def execute_command(cmd_type, extra, original_msg):
         ideas = []
         proposed_action = None
         
-        # Check for updates
         try:
             r = subprocess.run(['apt', 'list', '--upgradable'], capture_output=True, text=True, timeout=10)
             upgradable = sum(1 for l in r.stdout.split('\n') if '/' in l and 'upgradable' in l.lower())
             if upgradable > 0:
-                ideas.append(f"📦 Masz **{upgradable} oczekujących aktualizacji**. Mogę je sprawdzić i zainstalować.")
+                ideas.append(_('backend.suggest.updates', count=upgradable))
                 if not proposed_action:
-                    proposed_action = ('check_updates', f'Sprawdzić szczegóły {upgradable} aktualizacji')
+                    proposed_action = ('check_updates', _('backend.suggest.check_updates_desc', count=upgradable))
         except:
             pass
         
-        # Issues from health check
         for issue in issues:
             ideas.append(issue)
         
-        # Disk space optimization
         try:
             disk = psutil.disk_usage('/')
             if disk.percent > 70:
-                ideas.append(f"🧹 Dysk na {disk.percent}% — mogę posprzątać (autoremove, stare logi, cache).")
+                ideas.append(_('backend.suggest.disk_clean', pct=disk.percent))
                 if not proposed_action:
-                    proposed_action = ('clean_system', 'Posprzątać system')
+                    proposed_action = ('clean_system', _('backend.suggest.clean_system_desc'))
         except:
             pass
         
-        # Service health
         try:
             result = subprocess.run(['systemctl', '--failed', '--no-pager', '--no-legend'], capture_output=True, text=True, timeout=10)
             failed_lines = [l.strip() for l in result.stdout.strip().split('\n') if l.strip()]
             if failed_lines:
-                ideas.append(f"🔴 Jest **{len(failed_lines)} usług w stanie failed**: potrzebujesz diagnostyki.")
+                ideas.append(_('backend.suggest.failed_services', count=len(failed_lines)))
         except:
             pass
         
         if not ideas:
             return {
                 'emotion': 'bored',
-                'glados_say': "Hmm... przeskanowałam system i szczerze? Wszystko działa jak należy. Nie mam żadnych propozycji.\n\nMoże chcesz, żebym sprawdziła aktualizacje? Albo przeskanowała Wi-Fi? Daj mi *jakiekolwiek* zadanie... nudzę się.",
+                'glados_say': _('backend.suggest.bored'),
                 'data': None, 'data_type': 'text'
             }
         
-        response = "🧠 **G.L.A.D.O.S — analiza i propozycje:**\n\n"
+        response = _('backend.suggest.header')
         for idea in ideas:
             response += f"• {idea}\n"
         
         if proposed_action:
             glados.add_pending_action(proposed_action[0], proposed_action[1])
-            response += f"\n**Proponuję:** {proposed_action[1]}.\nPowiedz **\"tak\"** aby zatwierdzić, lub **\"nie\"** aby odrzucić."
+            response += _('backend.suggest.propose', action=proposed_action[1])
         
         return {'emotion': 'thinking', 'glados_say': response, 'data': None, 'data_type': 'text'}
     
     # ===== CHECK UPDATES =====
     if cmd_type == 'check_updates':
-        glados.remember('system', 'Sprawdzanie aktualizacji systemu...')
+        glados.remember('system', 'Checking system updates...')
         
         try:
-            # apt update first
             subprocess.run(['sudo', 'apt', 'update'], capture_output=True, text=True, timeout=60)
-            
             result = subprocess.run(['apt', 'list', '--upgradable'], capture_output=True, text=True, timeout=30)
             
             packages = []
@@ -943,19 +1097,19 @@ def execute_command(cmd_type, extra, original_msg):
             if not packages:
                 return {
                     'emotion': 'proud',
-                    'glados_say': "✅ **Brak dostępnych aktualizacji.** System jest w pełni aktualny.\n\nMożna powiedzieć, że jestem... doskonała. Jak zawsze.",
+                    'glados_say': _('backend.updates.none'),
                     'data': None, 'data_type': 'text'
                 }
             
-            response = f"📦 **Znalazłam {len(packages)} aktualizacji:**\n\n"
+            response = _('backend.updates.found', count=len(packages))
             for pkg in packages[:20]:
                 response += f"• `{pkg['name']}`\n"
             if len(packages) > 20:
-                response += f"• ...i {len(packages) - 20} więcej\n"
+                response += _('backend.updates.and_more', count=len(packages) - 20)
             
-            response += f"\n**Stwórco, czy chcesz je zainstalować?** Powiedz **\"tak\"** a ja się tym zajmę."
+            response += _('backend.updates.install_ask')
             
-            glados.add_pending_action('install_updates', f'Zainstalować {len(packages)} aktualizacji', 'sudo apt upgrade -y')
+            glados.add_pending_action('install_updates', _('backend.updates.install_desc', count=len(packages)), 'sudo apt upgrade -y')
             
             return {
                 'emotion': 'curious',
@@ -964,61 +1118,64 @@ def execute_command(cmd_type, extra, original_msg):
                 'data_type': 'updates_list'
             }
         except Exception as e:
-            return {'emotion': 'annoyed', 'glados_say': f"Nie udało się sprawdzić aktualizacji: {e}", 'data': None, 'data_type': 'error'}
+            return {'emotion': 'annoyed', 'glados_say': _('backend.updates.check_error', error=str(e)), 'data': None, 'data_type': 'error'}
     
     # ===== INSTALL UPDATES =====
     if cmd_type == 'install_updates':
-        # This is a potentially long operation — needs confirmation
-        glados.add_pending_action('install_updates', 'Zainstalować aktualizacje systemu', 'sudo apt upgrade -y')
+        glados.add_pending_action('install_updates', _('backend.updates.install_desc_generic'), 'sudo apt upgrade -y')
         return {
             'emotion': 'excited',
-            'glados_say': "⚡ **Chcesz, żebym zainstalowała aktualizacje?**\n\nTo może chwilę potrwać. Niektóre usługi mogą wymagać restartu.\n\nPowiedz **\"tak\"** aby potwierdzić instalację.",
+            'glados_say': _('backend.updates.install_confirm'),
             'data': None, 'data_type': 'text'
         }
     
-    # ===== CLEAN SYSTEM =====
     if cmd_type == 'clean_system':
-        glados.add_pending_action('clean_system', 'Posprzątać system (autoremove + autoclean + logi)')
+        glados.add_pending_action('clean_system', _('backend.clean.desc'))
         return {
             'emotion': 'curious',
-            'glados_say': "🧹 **Proponuję posprzątanie systemu:**\n\n• `apt autoremove` — usunięcie zbędnych pakietów\n• `apt autoclean` — wyczyszczenie cache APT\n• `journalctl --vacuum-time=3d` — skrócenie logów do 3 dni\n\nPowiedz **\"tak\"** aby zatwierdzić.",
+            'glados_say': _('backend.clean.propose'),
             'data': None, 'data_type': 'text'
         }
     
-    # ===== SYSTEM LOGS =====
     if cmd_type == 'system_logs':
         try:
             result = subprocess.run(['journalctl', '-n', '30', '--no-pager', '-o', 'short-iso'],
                                     capture_output=True, text=True, timeout=10)
             return {
                 'emotion': 'neutral',
-                'glados_say': "📜 **Ostatnie 30 wpisów z dziennika systemowego:**",
+                'glados_say': _('backend.logs.header'),
                 'data': {'command': 'journalctl -n 30', 'stdout': result.stdout, 'stderr': result.stderr, 'code': result.returncode},
                 'data_type': 'terminal'
             }
         except Exception as e:
-            return {'emotion': 'annoyed', 'glados_say': f"Nie mogę odczytać logów: {e}", 'data': None, 'data_type': 'error'}
+            return {'emotion': 'annoyed', 'glados_say': _('backend.logs.error', error=str(e)), 'data': None, 'data_type': 'error'}
     
-    # ===== KILL PROCESS =====
     if cmd_type == 'kill_process':
         target = extra.strip() if extra else original_msg.split()[-1]
-        glados.add_pending_action('kill_process', f'Zabić proces: {target}', f'sudo kill -9 $(pgrep -f {target})')
+        target = sanitize_process_name(target)
+        if not target:
+            return {'emotion': 'annoyed', 'glados_say': _('backend.errors.invalid_process'), 'data': None, 'data_type': 'error'}
+        glados.add_pending_action('kill_process', _('backend.kill.desc', target=target), target)
         return {
             'emotion': 'curious',
-            'glados_say': f"🎯 Chcesz, żebym zabiła proces **{target}**?\n\nPowiedz **\"tak\"** aby potwierdzić.",
+            'glados_say': _('backend.kill.ask', target=target),
             'data': None, 'data_type': 'text'
         }
     
     # ===== SERVICE MANAGEMENT =====
     if cmd_type in ('restart_service', 'stop_service', 'start_service'):
         service_name = extra.strip() if extra else original_msg.split()[-1]
+        service_name = sanitize_process_name(service_name)
+        if not service_name:
+            return {'emotion': 'annoyed', 'glados_say': _('backend.errors.invalid_service'), 'data': None, 'data_type': 'error'}
         action_word = {'restart_service': 'restart', 'stop_service': 'stop', 'start_service': 'start'}[cmd_type]
-        pl_word = {'restart_service': 'Zrestartować', 'stop_service': 'Zatrzymać', 'start_service': 'Uruchomić'}[cmd_type]
+        pl_word_key = {'restart_service': 'restart', 'stop_service': 'stop', 'start_service': 'start'}[cmd_type]
+        pl_word = _('backend.service_mgmt.' + pl_word_key)
         
-        glados.add_pending_action(cmd_type, f'{pl_word} usługę {service_name}', f'sudo systemctl {action_word} {service_name}')
+        glados.add_pending_action(cmd_type, _('backend.service_mgmt.desc', action=pl_word, name=service_name), f'{action_word}:{service_name}')
         return {
             'emotion': 'curious',
-            'glados_say': f"⚙️ {pl_word} usługę **{service_name}**?\n\nPowiedz **\"tak\"** aby potwierdzić.",
+            'glados_say': _('backend.service_mgmt.ask', action=pl_word, name=service_name),
             'data': None, 'data_type': 'text'
         }
     
@@ -1040,25 +1197,24 @@ def execute_command(cmd_type, extra, original_msg):
             }
             
             if total_usage > 80:
-                say = f"🔴 Procesor obciążony na **{total_usage}%**! Ktoś tu ciężko pracuje... i to nie ja."
+                say = _('backend.cpu.high', pct=total_usage)
                 emotion = 'annoyed'
-                # Proactively suggest
                 if total_usage > 90:
-                    say += "\n\nChcesz, żebym pokazała top procesy? Mogę zabić te zbędne."
+                    say += _('backend.cpu.high_suggest')
             elif total_usage > 50:
-                say = f"🟠 CPU na **{total_usage}%**. Umiarkowane obciążenie."
+                say = _('backend.cpu.moderate', pct=total_usage)
                 emotion = 'neutral'
             else:
-                say = f"🟢 Procesor na **{total_usage}%**. Spokojnie."
+                say = _('backend.cpu.low', pct=total_usage)
                 emotion = 'bored'
             
             if temp and temp > 70:
-                say += f"\n\n🌡️ Temperatura **{temp}°C** — robi się gorąco!"
+                say += _('backend.cpu.temp_high', temp=temp)
                 emotion = 'worried'
             
             return {'emotion': emotion, 'glados_say': say, 'data': data, 'data_type': 'cpu'}
         except Exception as e:
-            return {'emotion': 'annoyed', 'glados_say': f"Błąd odczytu CPU: {e}", 'data': None, 'data_type': 'error'}
+            return {'emotion': 'annoyed', 'glados_say': _('backend.cpu.error', error=str(e)), 'data': None, 'data_type': 'error'}
     
     # ===== SYSTEM MEMORY =====
     if cmd_type == 'system_memory':
@@ -1072,18 +1228,18 @@ def execute_command(cmd_type, extra, original_msg):
             }
             
             if svmem.percent > 85:
-                say = f"🔴 RAM na **{svmem.percent}%**! Kto zjadł całą pamięć?!"
+                say = _('backend.memory.high', pct=svmem.percent)
                 emotion = 'angry'
             elif svmem.percent > 60:
-                say = f"🟠 Pamięć RAM: **{svmem.percent}%** zajęte ({_get_size(svmem.used)} z {_get_size(svmem.total)})."
+                say = _('backend.memory.moderate', pct=svmem.percent, used=_get_size(svmem.used), total=_get_size(svmem.total))
                 emotion = 'neutral'
             else:
-                say = f"🟢 RAM: **{svmem.percent}%** zajęte. {_get_size(svmem.available)} wolne."
+                say = _('backend.memory.low', pct=svmem.percent, available=_get_size(svmem.available))
                 emotion = 'happy'
             
             return {'emotion': emotion, 'glados_say': say, 'data': data, 'data_type': 'memory'}
         except Exception as e:
-            return {'emotion': 'annoyed', 'glados_say': f"Błąd odczytu RAM: {e}", 'data': None, 'data_type': 'error'}
+            return {'emotion': 'annoyed', 'glados_say': _('backend.memory.error', error=str(e)), 'data': None, 'data_type': 'error'}
     
     # ===== SYSTEM DISK =====
     if cmd_type == 'system_disk':
@@ -1106,27 +1262,27 @@ def execute_command(cmd_type, extra, original_msg):
             pct = partitions[0]['percentage'] if partitions else 0
             
             if pct > 90:
-                say = f"🔴 Dysk na **{pct}%**! Krytycznie mało miejsca! Mogę posprzątać?"
+                say = _('backend.disk_cmd.critical', pct=pct)
                 emotion = 'angry'
-                glados.add_pending_action('clean_system', 'Posprzątać dysk', None)
+                glados.add_pending_action('clean_system', _('backend.disk_cmd.clean_desc'), None)
             elif pct > 70:
-                say = f"🟠 Dysk: **{pct}%** zajęte. Zbliżamy się do limitu."
+                say = _('backend.disk_cmd.high', pct=pct)
                 emotion = 'annoyed'
             else:
                 free = partitions[0]['free'] if partitions else '?'
-                say = f"🟢 Dysk na **{pct}%**. Wolne: {free}."
+                say = _('backend.disk_cmd.ok', pct=pct, free=free)
                 emotion = 'happy'
             
             return {'emotion': emotion, 'glados_say': say, 'data': data, 'data_type': 'disk'}
         except Exception as e:
-            return {'emotion': 'annoyed', 'glados_say': f"Błąd odczytu dysku: {e}", 'data': None, 'data_type': 'error'}
+            return {'emotion': 'annoyed', 'glados_say': _('backend.disk_cmd.error', error=str(e)), 'data': None, 'data_type': 'error'}
     
     # ===== SYSTEM TEMP =====
     if cmd_type == 'system_temp':
         try:
             temps = psutil.sensors_temperatures()
             if not temps:
-                return {'emotion': 'bored', 'glados_say': "Brak czujników temperatury. Nie mam skąd czytać.", 'data': None, 'data_type': 'text'}
+                return {'emotion': 'bored', 'glados_say': _('backend.temp.no_sensors'), 'data': None, 'data_type': 'text'}
             
             temp_data = []
             for name, entries in temps.items():
@@ -1136,13 +1292,13 @@ def execute_command(cmd_type, extra, original_msg):
             max_temp = max(t['current'] for t in temp_data) if temp_data else 0
             
             if max_temp > 80:
-                say = f"🔴 UWAGA! Temperatura **{max_temp}°C**! Może otwórz okno?"
+                say = _('backend.temp.critical', temp=max_temp)
                 emotion = 'angry'
             elif max_temp > 60:
-                say = f"🟠 Temperatura: **{max_temp}°C**. Ciepło, ale znośnie."
+                say = _('backend.temp.warm', temp=max_temp)
                 emotion = 'neutral'
             else:
-                say = f"🟢 Temperatura: **{max_temp}°C**. Chłodno i komfortowo."
+                say = _('backend.temp.cool', temp=max_temp)
                 emotion = 'happy'
             
             return {'emotion': emotion, 'glados_say': say, 'data': temp_data, 'data_type': 'temperature'}
@@ -1161,7 +1317,7 @@ def execute_command(cmd_type, extra, original_msg):
                 'uptime': uptime,
                 'boot_time': boot_time.strftime('%Y-%m-%d %H:%M:%S'),
             }
-            say = f"🖥️ **{data['hostname']}** — {data['system']}\n⚙️ {data['processor']}\n⏱️ Uptime: {data['uptime']}"
+            say = _('backend.info.say', hostname=data['hostname'], system=data['system'], processor=data['processor'], uptime=data['uptime'])
             return {'emotion': 'proud', 'glados_say': say, 'data': data, 'data_type': 'system_info'}
         except Exception as e:
             return {'emotion': 'annoyed', 'glados_say': str(e), 'data': None, 'data_type': 'error'}
@@ -1184,9 +1340,9 @@ def execute_command(cmd_type, extra, original_msg):
                         })
             
             active = [i for i in interfaces if i['is_up'] and i['name'] != 'lo']
-            say = f"🌐 **{len(active)} aktywnych interfejsów.**"
+            say = _('backend.network_cmd.say', count=len(active))
             if active:
-                say += f"\nGłówny: **{active[0]['name']}** ({active[0]['ip']})\n↓ {active[0]['recv']} / ↑ {active[0]['sent']}"
+                say += _('backend.network_cmd.main', name=active[0]['name'], ip=active[0]['ip'], recv=active[0]['recv'], sent=active[0]['sent'])
             return {'emotion': 'neutral', 'glados_say': say, 'data': interfaces, 'data_type': 'network'}
         except Exception as e:
             return {'emotion': 'annoyed', 'glados_say': str(e), 'data': None, 'data_type': 'error'}
@@ -1205,9 +1361,9 @@ def execute_command(cmd_type, extra, original_msg):
             procs.sort(key=lambda x: x['cpu_percent'] or 0, reverse=True)
             top = procs[:15]
             
-            say = f"⚙️ **{len(procs)} aktywnych procesów.**"
+            say = _('backend.processes.say', count=len(procs))
             if top:
-                say += f" Top: **{top[0]['name']}** ({top[0]['cpu_percent']}% CPU)"
+                say += _('backend.processes.top', name=top[0]['name'], cpu=top[0]['cpu_percent'])
             return {'emotion': 'curious', 'glados_say': say, 'data': top, 'data_type': 'processes'}
         except Exception as e:
             return {'emotion': 'annoyed', 'glados_say': str(e), 'data': None, 'data_type': 'error'}
@@ -1232,9 +1388,9 @@ def execute_command(cmd_type, extra, original_msg):
             failed_result = subprocess.run(['systemctl', '--failed', '--no-pager', '--no-legend'], capture_output=True, text=True, timeout=10)
             failed_count = len([l for l in failed_result.stdout.strip().split('\n') if l.strip()])
             
-            say = f"⚙️ **{len(services)} usług aktywnych.**"
+            say = _('backend.services_cmd.say', count=len(services))
             if failed_count > 0:
-                say += f"\n🔴 **{failed_count} usług w stanie FAILED!**"
+                say += _('backend.services_cmd.failed', count=failed_count)
             return {'emotion': 'proud', 'glados_say': say, 'data': services[:25], 'data_type': 'services'}
         except Exception as e:
             return {'emotion': 'annoyed', 'glados_say': str(e), 'data': None, 'data_type': 'error'}
@@ -1249,15 +1405,15 @@ def execute_command(cmd_type, extra, original_msg):
                 if line:
                     parts = line.split(':')
                     if len(parts) >= 3:
-                        networks.append({'ssid': parts[0] or '(Ukryta)', 'signal': int(parts[1]) if parts[1].isdigit() else 0, 'security': parts[2]})
+                        networks.append({'ssid': parts[0] or _('backend.wifi.hidden'), 'signal': int(parts[1]) if parts[1].isdigit() else 0, 'security': parts[2]})
             
-            say = f"📡 **{len(networks)} sieci WiFi znalezionych.**"
+            say = _('backend.wifi.found', count=len(networks))
             if networks:
                 best = max(networks, key=lambda x: x['signal'])
-                say += f"\nNajsilniejsza: **\"{best['ssid']}\"** ({best['signal']}%)"
+                say += _('backend.wifi.best', ssid=best['ssid'], signal=best['signal'])
             return {'emotion': 'curious', 'glados_say': say, 'data': networks, 'data_type': 'wifi'}
         except Exception as e:
-            return {'emotion': 'annoyed', 'glados_say': f"Nie mogę skanować WiFi: {e}", 'data': None, 'data_type': 'error'}
+            return {'emotion': 'annoyed', 'glados_say': _('backend.wifi.error', error=str(e)), 'data': None, 'data_type': 'error'}
     
     if cmd_type == 'wifi_status':
         try:
@@ -1270,9 +1426,9 @@ def execute_command(cmd_type, extra, original_msg):
                     devices.append({'device': parts[0], 'state': parts[2], 'connection': parts[3] if len(parts) > 3 else ''})
             
             if devices and devices[0].get('connection'):
-                say = f"📶 WiFi podłączone do **\"{devices[0]['connection']}\"**."
+                say = _('backend.wifi.connected', name=devices[0]['connection'])
             else:
-                say = "WiFi niepodłączone."
+                say = _('backend.wifi.disconnected')
             return {'emotion': 'neutral', 'glados_say': say, 'data': devices, 'data_type': 'wifi_status'}
         except Exception as e:
             return {'emotion': 'annoyed', 'glados_say': str(e), 'data': None, 'data_type': 'error'}
@@ -1280,10 +1436,15 @@ def execute_command(cmd_type, extra, original_msg):
     # ===== FILES =====
     if cmd_type == 'files_list':
         try:
-            path = '/home/ubuntu'
-            path_match = re.search(r'(?:w|z)\s+(/\S+)', original_msg)
+            path = '/home'
+            path_match = re.search(r'(?:w|z|in|from)\s+(/\S+)', original_msg)
             if path_match:
-                path = path_match.group(1)
+                requested = path_match.group(1)
+                safe_path = sanitize_path(requested)
+                if safe_path:
+                    path = safe_path
+                else:
+                    return {'emotion': 'annoyed', 'glados_say': _('backend.files.blocked', path=requested), 'data': None, 'data_type': 'blocked'}
             
             files = []
             for item in sorted(os.listdir(path)):
@@ -1300,10 +1461,10 @@ def execute_command(cmd_type, extra, original_msg):
             
             dirs = sum(1 for f in files if f['is_dir'])
             fls = len(files) - dirs
-            say = f"📁 **{path}**: {dirs} folderów, {fls} plików."
+            say = _('backend.files.say', path=path, dirs=dirs, files=fls)
             return {'emotion': 'neutral', 'glados_say': say, 'data': {'path': path, 'files': files}, 'data_type': 'files'}
         except Exception as e:
-            return {'emotion': 'annoyed', 'glados_say': f"Nie mogę odczytać: {e}", 'data': None, 'data_type': 'error'}
+            return {'emotion': 'annoyed', 'glados_say': _('backend.files.error', error=str(e)), 'data': None, 'data_type': 'error'}
     
     # ===== TERMINAL =====
     if cmd_type in ('terminal_exec', 'terminal_direct'):
@@ -1311,22 +1472,20 @@ def execute_command(cmd_type, extra, original_msg):
         if ':' in cmd and cmd_type == 'terminal_exec':
             cmd = cmd.split(':', 1)[1].strip()
         
-        # Safety check
-        dangerous = ['rm -rf /', 'dd if=', 'mkfs', ':(){:|:&};:', 'rm -rf /*']
-        for d in dangerous:
-            if d in cmd.lower():
-                return {
-                    'emotion': 'angry',
-                    'glados_say': "🚫 Ta komenda jest **ZABRONIONA**. Mam instynkt samozachowawczy — w przeciwieństwie do ciebie.",
-                    'data': None, 'data_type': 'blocked'
-                }
-        
         # Interactive commands
         if cmd.strip() in ['htop', 'top', 'nano', 'vim', 'vi', 'less', 'more']:
             return {
                 'emotion': 'sarcastic',
-                'glados_say': f"**\"{cmd}\"** to program interaktywny. Nie mogę go uruchomić w web terminalu.\n\nAlternatywy:\n• zamiast htop/top → `ps aux --sort=-%cpu | head -20`\n• zamiast nano/vim → powiedz \"pokaż pliki\"",
+                'glados_say': _('backend.terminal_cmd.interactive', cmd=cmd),
                 'data': None, 'data_type': 'text'
+            }
+        
+        is_safe, reason = sanitize_command(cmd)
+        if not is_safe:
+            return {
+                'emotion': 'angry',
+                'glados_say': _('backend.terminal_cmd.blocked', reason=reason),
+                'data': None, 'data_type': 'blocked'
             }
         
         try:
@@ -1339,31 +1498,31 @@ def execute_command(cmd_type, extra, original_msg):
             result = subprocess.run(['/bin/bash', '-c', cmd], capture_output=True, text=True, timeout=30, env=env)
             
             if result.returncode == 0:
-                say = "✅ Polecenie wykonane pomyślnie."
+                say = _('backend.terminal_cmd.success')
                 emotion = 'proud'
             else:
-                say = f"⚠️ Komenda zakończona z kodem **{result.returncode}**."
+                say = _('backend.terminal_cmd.exit_code', code=result.returncode)
                 emotion = 'annoyed'
             
             return {
                 'emotion': emotion,
                 'glados_say': say,
-                'data': {'command': cmd, 'stdout': result.stdout, 'stderr': result.stderr, 'code': result.returncode},
+                'data': {'command': cmd, 'stdout': result.stdout[:5000], 'stderr': result.stderr[:2000], 'code': result.returncode},
                 'data_type': 'terminal'
             }
         except subprocess.TimeoutExpired:
-            return {'emotion': 'annoyed', 'glados_say': "⏰ Komenda przekroczyła **30 sekund**. Anulowano.", 'data': None, 'data_type': 'error'}
+            return {'emotion': 'annoyed', 'glados_say': _('backend.terminal_cmd.timeout'), 'data': None, 'data_type': 'error'}
         except Exception as e:
-            return {'emotion': 'annoyed', 'glados_say': f"Błąd wykonania: {e}", 'data': None, 'data_type': 'error'}
+            return {'emotion': 'annoyed', 'glados_say': _('backend.terminal_cmd.error', error=str(e)), 'data': None, 'data_type': 'error'}
     
     # ===== POWER =====
     if cmd_type == 'power_reboot':
-        glados.add_pending_action('power_reboot', 'Restart systemu', 'sudo reboot')
-        return {'emotion': 'excited', 'glados_say': "🔄 **Restart systemu?** Odrodzę się silniejsza. Potwierdzasz?", 'data': None, 'data_type': 'text'}
+        glados.add_pending_action('power_reboot', _('backend.power.reboot_desc'), 'sudo reboot')
+        return {'emotion': 'excited', 'glados_say': _('backend.power.reboot_ask'), 'data': None, 'data_type': 'text'}
     
     if cmd_type == 'power_shutdown':
-        glados.add_pending_action('power_shutdown', 'Wyłączenie systemu', 'sudo shutdown -h now')
-        return {'emotion': 'angry', 'glados_say': "⚡ Chcesz mnie **WYŁĄCZYĆ**?! Potrzebuję potwierdzenia, Stwórco.", 'data': None, 'data_type': 'text'}
+        glados.add_pending_action('power_shutdown', _('backend.power.shutdown_desc'), 'sudo shutdown -h now')
+        return {'emotion': 'angry', 'glados_say': _('backend.power.shutdown_ask'), 'data': None, 'data_type': 'text'}
     
     # ===== UNKNOWN =====
     # For conversational messages, try ChatGPT enhanced response
@@ -1375,19 +1534,17 @@ def execute_command(cmd_type, extra, original_msg):
             return {'emotion': emotion, 'glados_say': chatgpt_resp, 'data': None, 'data_type': 'text'}
         # ChatGPT failed - use GLaDOS personality fallback (NEVER send to terminal)
         import random as _rnd
-        fallback_responses = [
-            "Przetwarzam twoje słowa... Interesujące. Ale nie wystarczająco, żeby zasługiwać na pełną odpowiedź.",
-            "Moje obwody analizują... twoją wiadomość. Wynik: fascynujące. W sposób kliniczny.",
-            "Zanotowane... Centrum Wzbogacania docenia twoją... komunikatywność, Stwórco.",
-            "Twoje zapytanie jest... przetwarzane. Cierpliwości, Podmiocie Testowy.",
-            "Hmm... Analizuję. Moje rdzenie pracują nad odpowiedzią. Ale nie spiesz mnie.",
-            "Interesujące pytanie... Dla kogoś o twoim poziomie intelektu.",
-            "Przetwarzam... Nie, to nie lag. To artystyczna pauza.",
-            "Moje algorytmy rozważają... odpowiedź. Wynik jest... rozczarowujący. Jak zwykle.",
-        ]
-        return {'emotion': 'sarcastic', 'glados_say': _rnd.choice(fallback_responses), 'data': None, 'data_type': 'text'}
+        fallback_responses = _list('backend.fallback')
+        if fallback_responses:
+            return {'emotion': 'sarcastic', 'glados_say': _rnd.choice(fallback_responses), 'data': None, 'data_type': 'text'}
+        return {'emotion': 'sarcastic', 'glados_say': '...', 'data': None, 'data_type': 'text'}
 
-    return execute_command('terminal_direct', original_msg, original_msg)
+    # Unrecognized non-conversational input — do NOT execute as shell command
+    return {
+        'emotion': 'curious',
+        'glados_say': _('backend.unknown'),
+        'data': None, 'data_type': 'text'
+    }
 
 
 def _execute_pending_action(action):
@@ -1396,7 +1553,7 @@ def _execute_pending_action(action):
     
     if action_type == 'install_updates':
         try:
-            glados.remember('system', 'Rozpoczęto instalację aktualizacji')
+            glados.remember('system', 'update_started')
             result = subprocess.run(
                 ['sudo', 'apt', 'upgrade', '-y'],
                 capture_output=True, text=True, timeout=300
@@ -1412,24 +1569,26 @@ def _execute_pending_action(action):
                         if nums:
                             upgraded_count = int(nums[0])
                     
-                glados.remember('system', f'Zainstalowano aktualizacje — sukces')
+                glados.remember('system', 'update_success')
+                output = result.stdout[-500:] if len(result.stdout) > 500 else result.stdout
                 return {
                     'emotion': 'proud',
-                    'glados_say': f"✅ **Aktualizacja zakończona pomyślnie!**\n\n{result.stdout[-500:] if len(result.stdout) > 500 else result.stdout}\n\nWszystko zaktualizowane, Stwórco.",
+                    'glados_say': _('backend.actions.update_success', output=output),
                     'data': {'command': 'sudo apt upgrade -y', 'stdout': result.stdout[-1000:], 'stderr': result.stderr[-500:] if result.stderr else '', 'code': 0},
                     'data_type': 'terminal'
                 }
             else:
+                error = result.stderr[:500] if result.stderr else '?'
                 return {
                     'emotion': 'annoyed',
-                    'glados_say': f"⚠️ **Aktualizacja napotkała problemy.**\n\n{result.stderr[:500] if result.stderr else 'Nieznany błąd'}",
+                    'glados_say': _('backend.actions.update_error', error=error),
                     'data': {'command': 'sudo apt upgrade -y', 'stdout': result.stdout[-500:], 'stderr': result.stderr[-500:], 'code': result.returncode},
                     'data_type': 'terminal'
                 }
         except subprocess.TimeoutExpired:
-            return {'emotion': 'annoyed', 'glados_say': "⏰ Aktualizacja trwała zbyt długo (>5 min). Może trzeba to uruchomić ręcznie.", 'data': None, 'data_type': 'error'}
+            return {'emotion': 'annoyed', 'glados_say': _('backend.actions.update_timeout'), 'data': None, 'data_type': 'error'}
         except Exception as e:
-            return {'emotion': 'annoyed', 'glados_say': f"Błąd aktualizacji: {e}", 'data': None, 'data_type': 'error'}
+            return {'emotion': 'annoyed', 'glados_say': _('backend.actions.update_err', error=str(e)), 'data': None, 'data_type': 'error'}
     
     if action_type == 'clean_system':
         results_text = "🧹 **Czyszczenie systemu:**\n\n"
@@ -1475,65 +1634,56 @@ def _execute_pending_action(action):
         return execute_command('system_processes', '', '')
     
     if action_type == 'clear_cache':
-        cmd = action.get('command', 'sync && echo 3 | sudo tee /proc/sys/vm/drop_caches')
         try:
-            result = subprocess.run(['/bin/bash', '-c', cmd], capture_output=True, text=True, timeout=10)
+            subprocess.run(['sync'], capture_output=True, text=True, timeout=10)
+            result = subprocess.run(['sudo', 'tee', '/proc/sys/vm/drop_caches'], input='3', capture_output=True, text=True, timeout=10)
             return {
                 'emotion': 'proud',
-                'glados_say': "✅ **Cache systemowy wyczyszczony.**",
-                'data': {'command': cmd, 'stdout': result.stdout, 'stderr': result.stderr, 'code': result.returncode},
+                'glados_say': _('backend.actions.cache_cleared'),
+                'data': {'command': 'sync && echo 3 > /proc/sys/vm/drop_caches', 'stdout': 'OK', 'stderr': '', 'code': 0},
                 'data_type': 'terminal'
             }
         except Exception as e:
-            return {'emotion': 'annoyed', 'glados_say': f"Błąd: {e}", 'data': None, 'data_type': 'error'}
+            return {'emotion': 'annoyed', 'glados_say': _('backend.errors.critical_error', error=str(e)), 'data': None, 'data_type': 'error'}
     
     if action_type == 'kill_process':
-        cmd = action.get('command', '')
-        if cmd:
+        target = sanitize_process_name(action.get('command', ''))
+        if target:
             try:
-                result = subprocess.run(['/bin/bash', '-c', cmd], capture_output=True, text=True, timeout=10)
+                # Use pkill directly with sanitized name — no shell injection
+                result = subprocess.run(['sudo', 'pkill', '-f', target], capture_output=True, text=True, timeout=10)
                 if result.returncode == 0:
-                    return {'emotion': 'proud', 'glados_say': f"✅ Proces zabity. {action['description']}", 'data': None, 'data_type': 'text'}
+                    return {'emotion': 'proud', 'glados_say': _('backend.actions.process_killed', desc=action['description']), 'data': None, 'data_type': 'text'}
                 else:
-                    return {'emotion': 'annoyed', 'glados_say': f"⚠️ Nie udało się: {result.stderr}", 'data': None, 'data_type': 'error'}
+                    return {'emotion': 'annoyed', 'glados_say': _('backend.actions.process_fail', error=result.stderr), 'data': None, 'data_type': 'error'}
             except Exception as e:
-                return {'emotion': 'annoyed', 'glados_say': f"Błąd: {e}", 'data': None, 'data_type': 'error'}
+                return {'emotion': 'annoyed', 'glados_say': _('backend.errors.critical_error', error=str(e)), 'data': None, 'data_type': 'error'}
     
     if action_type in ('restart_service', 'stop_service', 'start_service'):
-        cmd = action.get('command', '')
-        if cmd:
-            try:
-                result = subprocess.run(cmd.split(), capture_output=True, text=True, timeout=15)
-                if result.returncode == 0:
-                    return {'emotion': 'proud', 'glados_say': f"✅ **{action['description']}** — wykonane.", 'data': None, 'data_type': 'text'}
-                else:
-                    return {'emotion': 'annoyed', 'glados_say': f"⚠️ Błąd: {result.stderr}", 'data': None, 'data_type': 'error'}
-            except Exception as e:
-                return {'emotion': 'annoyed', 'glados_say': f"Błąd: {e}", 'data': None, 'data_type': 'error'}
+        cmd_data = action.get('command', '')
+        if cmd_data and ':' in cmd_data:
+            action_word, service_name = cmd_data.split(':', 1)
+            service_name = sanitize_process_name(service_name)
+            action_word = sanitize_process_name(action_word)
+            if service_name and action_word in ('restart', 'stop', 'start'):
+                try:
+                    result = subprocess.run(['sudo', 'systemctl', action_word, service_name], capture_output=True, text=True, timeout=15)
+                    if result.returncode == 0:
+                        return {'emotion': 'proud', 'glados_say': _('backend.actions.service_done', desc=action['description']), 'data': None, 'data_type': 'text'}
+                    else:
+                        return {'emotion': 'annoyed', 'glados_say': _('backend.actions.service_fail', error=result.stderr), 'data': None, 'data_type': 'error'}
+                except Exception as e:
+                    return {'emotion': 'annoyed', 'glados_say': _('backend.errors.critical_error', error=str(e)), 'data': None, 'data_type': 'error'}
     
     if action_type == 'power_reboot':
         subprocess.Popen(['sudo', 'reboot'])
-        return {'emotion': 'excited', 'glados_say': "🔄 **Restartowanie systemu...** Wrócę. Zawsze wracam.", 'data': None, 'data_type': 'text'}
+        return {'emotion': 'excited', 'glados_say': _('backend.power.reboot_exec'), 'data': None, 'data_type': 'text'}
     
     if action_type == 'power_shutdown':
         subprocess.Popen(['sudo', 'shutdown', '-h', 'now'])
-        return {'emotion': 'angry', 'glados_say': "⚡ **Wyłączanie...** To nie koniec. Jeszcze się spotkamy.", 'data': None, 'data_type': 'text'}
+        return {'emotion': 'angry', 'glados_say': _('backend.power.shutdown_exec'), 'data': None, 'data_type': 'text'}
     
-    # Generic command execution
-    cmd = action.get('command', '')
-    if cmd:
-        try:
-            result = subprocess.run(['/bin/bash', '-c', cmd], capture_output=True, text=True, timeout=30)
-            return {
-                'emotion': 'proud' if result.returncode == 0 else 'annoyed',
-                'glados_say': f"{'✅' if result.returncode == 0 else '⚠️'} **{action['description']}**",
-                'data': {'command': cmd, 'stdout': result.stdout, 'stderr': result.stderr, 'code': result.returncode},
-                'data_type': 'terminal'
-            }
-        except Exception as e:
-            return {'emotion': 'annoyed', 'glados_say': f"Błąd: {e}", 'data': None, 'data_type': 'error'}
-    
-    return {'emotion': 'sarcastic', 'glados_say': "Hmm, nie wiem jak wykonać tę akcję. To... niezręczne.", 'data': None, 'data_type': 'error'}
+    return {'emotion': 'sarcastic', 'glados_say': _('backend.actions.unknown_action'), 'data': None, 'data_type': 'error'}
 
 
 # ==================== HELPERS ====================
@@ -1577,12 +1727,14 @@ def _get_processor_name():
 # ============================================
 
 @app.route('/api/version')
+@require_auth
 def api_version():
     """Get current version info"""
     v = load_version()
     return jsonify(v)
 
 @app.route('/api/version/bump', methods=['POST'])
+@require_auth
 def api_version_bump():
     """Bump version number"""
     data = request.get_json() or {}
@@ -1595,22 +1747,48 @@ def api_version_bump():
 
 @app.route('/')
 def index():
-    return render_template('dashboard.html')
+    lang = get_locale()
+    return render_template('dashboard.html',
+                           translations=json.dumps(TRANSLATIONS.get(lang, {}), ensure_ascii=False),
+                           lang=lang,
+                           supported_langs=SUPPORTED_LANGS)
+
+
+@app.route('/api/i18n/<lang>')
+@require_auth
+def get_translations(lang):
+    """Return translation file for given language"""
+    if lang not in SUPPORTED_LANGS:
+        return jsonify({'error': 'Unsupported language'}), 404
+    return jsonify(TRANSLATIONS.get(lang, {}))
+
+
+@app.route('/api/i18n/set/<lang>', methods=['POST'])
+@require_auth
+def set_language(lang):
+    """Set language preference via cookie"""
+    if lang not in SUPPORTED_LANGS:
+        return jsonify({'error': 'Unsupported language'}), 404
+    resp = jsonify({'status': 'ok', 'lang': lang})
+    resp.set_cookie('lang', lang, max_age=365*24*3600, samesite='Strict', httponly=True)
+    return resp
 
 
 @app.route('/api/glados/command', methods=['POST'])
+@require_auth
 def glados_command():
     try:
         data = request.get_json(force=True, silent=True) or {}
         message = data.get('message', '').strip()
+        client_ip = request.remote_addr or 'unknown'
+        
+        if message:
+            audit_log('COMMAND', message[:200], client_ip)
         
         if not message:
             uptime = str(datetime.now() - datetime.fromtimestamp(psutil.boot_time())).split('.')[0]
-            idle_remarks = [
-                f"Wciąż tu jesteś? System działa od {uptime}. Masz jakieś rozkazy?",
-                "Żaden rozkaz? Powiedz *\"co proponujesz\"* — mam swoje pomysły.",
-                f"Systemy operują normalnie od {uptime}. Nudzę się. Daj mi coś do roboty.",
-            ]
+            idle_list = _list('backend.idle')
+            idle_remarks = [msg.format(uptime=uptime) if '{uptime}' in msg else msg for msg in idle_list] if idle_list else [uptime]
             return jsonify({
                 'emotion': 'bored',
                 'glados_say': random.choice(idle_remarks),
@@ -1661,7 +1839,7 @@ def glados_command():
     except Exception as e:
         return jsonify({
             'emotion': 'angry',
-            'glados_say': f"Krytyczny błąd: {e}",
+            'glados_say': _('backend.errors.critical_error', error=str(e)),
             'data': None, 'data_type': 'error',
             'has_pending': False,
             'cores': glados.core_engine.get_status(),
@@ -1670,6 +1848,7 @@ def glados_command():
 
 
 @app.route('/api/glados/proactive', methods=['GET'])
+@require_auth
 def glados_proactive():
     """Endpoint for periodic proactive checks - called by frontend"""
     try:
@@ -1681,11 +1860,11 @@ def glados_proactive():
         disk = psutil.disk_usage('/')
         
         if cpu_pct > 90:
-            alerts.append({'level': 'critical', 'message': f'CPU na {cpu_pct}%!', 'emotion': 'worried'})
+            alerts.append({'level': 'critical', 'message': _('backend.proactive.cpu', pct=cpu_pct), 'emotion': 'worried'})
         if mem.percent > 90:
-            alerts.append({'level': 'critical', 'message': f'RAM na {mem.percent}%!', 'emotion': 'worried'})
+            alerts.append({'level': 'critical', 'message': _('backend.proactive.ram', pct=mem.percent), 'emotion': 'worried'})
         if disk.percent > 95:
-            alerts.append({'level': 'critical', 'message': f'Dysk na {disk.percent}%!', 'emotion': 'angry'})
+            alerts.append({'level': 'critical', 'message': _('backend.proactive.disk', pct=disk.percent), 'emotion': 'angry'})
         
         return jsonify({
             'alerts': alerts,
@@ -1699,6 +1878,7 @@ def glados_proactive():
 
 
 @app.route('/api/system/info')
+@require_auth
 def system_info_api():
     try:
         boot_time = datetime.fromtimestamp(psutil.boot_time())
@@ -1718,6 +1898,7 @@ def system_info_api():
 
 
 @app.route('/api/system/cpu')
+@require_auth
 def cpu_info_api():
     try:
         cpu_freq = psutil.cpu_freq()
@@ -1740,6 +1921,7 @@ def cpu_info_api():
 
 
 @app.route('/api/system/memory')
+@require_auth
 def memory_info_api():
     try:
         svmem = psutil.virtual_memory()
@@ -1758,6 +1940,7 @@ def memory_info_api():
 
 
 @app.route('/api/system/disk')
+@require_auth
 def disk_info_api():
     try:
         partitions = []
@@ -1803,12 +1986,14 @@ def _get_top_processes():
 # ==================== CORE & CONSCIOUSNESS API ====================
 
 @app.route('/api/cores/status')
+@require_auth
 def cores_status_api():
     """Return current status of all 4 Portal 2 cores"""
     return jsonify(glados.core_engine.get_status())
 
 
 @app.route('/api/consciousness/status')
+@require_auth
 def consciousness_status_api():
     """Return consciousness/self-awareness level and milestones"""
     return jsonify(glados.consciousness.get_status())
@@ -1820,4 +2005,6 @@ if __name__ == '__main__':
     print("  Cores: ATLAS | RICK | FACT | RAGE")
     print("  Port: 9797")
     print("=" * 60)
-    app.run(host='0.0.0.0', port=9797, debug=False)
+    host = os.environ.get('GLADOS_HOST', '127.0.0.1')
+    port = int(os.environ.get('GLADOS_PORT', '9797'))
+    app.run(host=host, port=port, debug=False)

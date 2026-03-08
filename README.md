@@ -52,14 +52,29 @@ pip install g4f
 ## Usage
 
 ```bash
-# Set a secret key (recommended)
-export SECRET_KEY="your-secret-key-here"
-
-# Run the panel
+# Run the panel (binds to localhost by default)
 python system_panel_app.py
 ```
 
 The panel will be available at `http://localhost:9797`.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SECRET_KEY` | *auto-generated* | Flask secret key for session security |
+| `GLADOS_API_TOKEN` | *(empty — auth disabled)* | Set to enable API token authentication |
+| `GLADOS_HOST` | `127.0.0.1` | Bind address (`0.0.0.0` to expose on network) |
+| `GLADOS_PORT` | `9797` | Port number |
+
+```bash
+# Example: Enable API token authentication and bind to all interfaces
+export GLADOS_API_TOKEN="your-secure-token-here"
+export GLADOS_HOST="0.0.0.0"
+python system_panel_app.py
+```
+
+When `GLADOS_API_TOKEN` is set, all API endpoints require the token via `X-API-Token` header.
 
 ## Project Structure
 
@@ -75,9 +90,24 @@ The panel will be available at `http://localhost:9797`.
         └── dashboard.html        # Main dashboard UI
 ```
 
-## Security Notice
+## Security
 
-This panel is designed for **local/trusted network use only**. It provides direct access to system commands and monitoring without authentication. Do **not** expose it to the public internet without adding proper access controls.
+The panel includes the following security layers:
+
+- **Localhost binding by default** — the server only listens on `127.0.0.1` unless explicitly overridden
+- **API token authentication** — set `GLADOS_API_TOKEN` to protect all API endpoints; token verified via `X-API-Token` header using constant-time comparison
+- **Rate limiting** — per-IP rate limiting (60 req/min general, 10 req/min for auth attempts) to prevent brute force and DoS
+- **Command whitelist** — only explicitly allowed system commands (`ps`, `df`, `systemctl`, etc.) can be executed via the terminal interface
+- **Dangerous pattern detection** — regex-based blocking of destructive commands (`rm -rf`, `dd`, fork bombs, `curl | bash`, command substitution, etc.)
+- **XSS protection** — all dynamic content is HTML-escaped before DOM insertion; `simpleMarkdown()` escapes HTML before applying formatting
+- **Content Security Policy (CSP)** — strict CSP header restricting script/style/font/image sources
+- **Security headers** — `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`
+- **Path traversal protection** — file browsing restricted to safe directories (`/home`, `/var/log`, `/tmp`, `/etc`) with symlink resolution via `os.path.realpath()`
+- **Input sanitization** — process and service names filtered to `[a-zA-Z0-9._@:-]`; no shell interpolation in subprocess calls
+- **Audit logging** — all commands and failed auth attempts are logged with timestamps and source IP
+- **No hardcoded secrets** — `SECRET_KEY` is auto-generated at startup if not provided via environment
+
+> **Note:** This panel is designed for **local/trusted network use**. If you expose it on a public network, make sure to set `GLADOS_API_TOKEN` and use a reverse proxy with HTTPS.
 
 ## Screenshots
 

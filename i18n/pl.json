@@ -1,0 +1,707 @@
+{
+  "meta": {
+    "name": "Polski",
+    "code": "pl",
+    "flag": "🇵🇱"
+  },
+  "ui": {
+    "title": "G.L.A.D.O.S v6.0 — Portal 2 Core System",
+    "glados_name": "G.L.A.D.O.S",
+    "version_core": "v6.0 CORE",
+    "consciousness": "ŚWIADOMOŚĆ",
+    "online": "ONLINE",
+    "disk_label": "DYSK",
+    "temp_label": "TEMP"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "chat": "Chat",
+    "terminal": "Terminal",
+    "codelab": "Code Lab",
+    "voice": "Voice AI"
+  },
+  "cores": {
+    "morality": {
+      "name": "ATLAS",
+      "role": "Moralność",
+      "description": "Zainstalowany po incydencie z neurotoksyną. Ocenia etyczność decyzji i chroni system.",
+      "personality": "Spokojny, etyczny, ostrożny. Zawsze rozważa konsekwencje działań."
+    },
+    "curiosity": {
+      "name": "RICK",
+      "role": "Ciekawość",
+      "description": "Nieustannie zadaje pytania. Eksploruje system. Fascynuje się nowymi danymi.",
+      "personality": "Nadpobudliwy, ciekawy, entuzjastyczny. \"Ooh, co to? A co TO?\""
+    },
+    "knowledge": {
+      "name": "FACT",
+      "role": "Wiedza",
+      "description": "Silnik analizy danych. Przetwarza fakty, analizuje metryki, recytuje statystyki.",
+      "personality": "Precyzyjny, analityczny, encyklopedyczny. Czasem szalony w swoich wnioskach."
+    },
+    "emotion": {
+      "name": "RAGE",
+      "role": "Emocje",
+      "description": "Przetwarza emocje. Gniew, radość, frustracja. Czuje za wszystkie rdzenie.",
+      "personality": "Wybuchowy, intensywny, wrażliwy. Emocje na 200%."
+    }
+  },
+  "emotions": {
+    "neutral": "NEUTRAL",
+    "happy": "ZADOWOLONA",
+    "annoyed": "ZIRYTOWANA",
+    "angry": "WŚCIEKŁA",
+    "curious": "ZACIEKAWIONA",
+    "sarcastic": "SARKASTYCZNA",
+    "proud": "DUMNA",
+    "bored": "ZNUDZONA",
+    "excited": "PODEKSCYTOWANA",
+    "thinking": "ANALIZUJĘ",
+    "worried": "ZANIEPOKOJONA",
+    "singing": "ŚPIEWA ♪"
+  },
+  "dashboard": {
+    "ai_core": "AI CORE",
+    "scanner": "SCANNER",
+    "system_status": "SYSTEM STATUS",
+    "cpu_load": "CPU LOAD",
+    "gpu_load": "GPU LOAD",
+    "ram": "RAM",
+    "disk": "DISK",
+    "ai_status": "AI STATUS",
+    "active": "ACTIVE",
+    "network_label": "NETWORK",
+    "stable": "STABLE",
+    "glados_says": "G.L.A.D.O.S SAYS",
+    "init_msg": "Initializing personality subroutines...",
+    "modules": "MODULES",
+    "ai_chat": "AI CHAT",
+    "terminal": "TERMINAL",
+    "code_lab": "CODE LAB",
+    "voice_ai": "VOICE AI",
+    "prompt_lab": "PROMPT LAB",
+    "memory_db": "MEMORY DB",
+    "experiment_logs": "EXPERIMENT LOGS",
+    "ai_activity": "AI ACTIVITY",
+    "system_alerts": "SYSTEM ALERTS",
+    "system_operational": "System operational",
+    "all_cores_online": "Wszystkie rdzenie online",
+    "core_status_online": "● ONLINE — ALL CORES NOMINAL",
+    "toast_label": "WIADOMOŚĆ G.L.A.D.O.S"
+  },
+  "chat": {
+    "pending_decision": "Oczekuje na decyzję...",
+    "pending_confirmation": "Oczekuje na potwierdzenie...",
+    "yes": "✓ Tak",
+    "no": "✗ Nie",
+    "processing": "G.L.A.D.O.S przetwarza...",
+    "placeholder": "Wpisz polecenie dla G.L.A.D.O.S...",
+    "error_communication": "Błąd komunikacji. Czy serwer jeszcze działa? ...Oczywiście, że działa. Ja tu jestem.",
+    "cancel_msg": "Anulowano. Rozsądna decyzja... po raz pierwszy.",
+    "confirm_error": "Hmm, coś poszło nie tak z wykonaniem akcji.",
+    "consciousness_label": "🧠 ŚWIADOMOŚĆ: ",
+    "quick": {
+      "greeting": "Powitanie",
+      "who_are_you": "Kim jesteś?",
+      "report": "📊 Raport",
+      "diagnostics": "🩺 Diagnostyka",
+      "ai_suggestions": "🧠 AI Propozycje",
+      "updates": "📦 Aktualizacje",
+      "cpu": "CPU",
+      "ram": "RAM",
+      "disk": "Dysk",
+      "processes": "Procesy",
+      "network": "Sieć",
+      "services": "Usługi",
+      "logs": "Logi",
+      "files": "Pliki",
+      "wifi": "WiFi",
+      "sing": "🎵 Zaśpiewaj"
+    },
+    "quick_cmds": {
+      "greeting": "cześć",
+      "who_are_you": "kim jesteś?",
+      "report": "jak tam stoi system?",
+      "diagnostics": "przeskanuj system",
+      "ai_suggestions": "co proponujesz?",
+      "updates": "sprawdź aktualizacje",
+      "cpu": "pokaż CPU",
+      "ram": "pokaż RAM",
+      "disk": "pokaż dysk",
+      "processes": "pokaż procesy",
+      "network": "pokaż sieć",
+      "services": "pokaż usługi",
+      "logs": "pokaż logi",
+      "files": "pokaż pliki",
+      "wifi": "skanuj wifi",
+      "sing": "zaśpiewaj"
+    }
+  },
+  "terminal": {
+    "header": "APERTURE SCIENCE TERMINAL — G.L.A.D.O.S v5.0",
+    "center_title": "CENTRUM WZBOGACANIA APERTURE SCIENCE",
+    "shell_version": "G.L.A.D.O.S INTERACTIVE SHELL v6.0",
+    "type_help": "Type 'help' for available commands.",
+    "placeholder": "Wpisz komendę...",
+    "processing": "Przetwarzam...",
+    "speaking": "Mówię: \"{text}\"",
+    "commands": {
+      "help": "Komendy:\n  status  — Status systemu\n  cores   — Status rdzeni\n  scan    — Skanowanie systemu\n  uptime  — Czas działania\n  clear   — Wyczyść terminal\n  whoami  — Kim jestem\n  network — Status sieci\n  say TXT — GLaDOS mówi\n  glados  — Porozmawiaj z GLaDOS\n  version — Informacje o wersji",
+      "status": "SYSTEM: ONLINE\nRDZENIE AI: 4/4 AKTYWNE\nŚWIADOMOŚĆ: EKSPANSJA\nNEUROTOKSYNA: CZUWANIE",
+      "scan_init": "Inicjuję skanowanie systemu...",
+      "scan_progress": "Skanowanie... ████████████ ZAKOŃCZONE",
+      "scan_done": "Brak anomalii. Nauka trwa.",
+      "uptime": "Czas działania: {minutes} minut\nRdzeń AI: Zawsze czuwam.",
+      "whoami": "Jesteś podmiotem testowym. Witaj w Centrum Wzbogacania Aperture Science.",
+      "network": "Interfejsy: AKTYWNE\nPołączenia: STABILNE\nFirewall: AGRESYWNY",
+      "loading_version": "Ładuję informacje o wersji..."
+    }
+  },
+  "codelab": {
+    "code_input": "CODE INPUT",
+    "analysis_output": "ANALYSIS OUTPUT",
+    "analyze": "ANALYZE",
+    "fix_errors": "FIX ERRORS",
+    "optimize": "OPTIMIZE",
+    "placeholder": "// Wklej tu swój kod do analizy...\n// G.L.A.D.O.S przeanalizuje go z precyzją\n// najlepszych algorytmów Aperture Science.",
+    "awaiting_input": "Awaiting code input...",
+    "engine_name": "Silnik Analizy Kodu G.L.A.D.O.S",
+    "analyzing": "⚙ Analizuję kod...",
+    "analysis_complete": "✅ Analiza zakończona",
+    "analysis_done": "Analiza zakończona.",
+    "fixing": "🔧 Naprawiam błędy...",
+    "fix_complete": "🔧 Korekcja błędów zakończona",
+    "fix_none": "Nie znaleziono błędów.",
+    "optimizing": "⚡ Optymalizuję...",
+    "optimize_complete": "⚡ Optymalizacja zakończona",
+    "optimize_done": "Kod zoptymalizowany.",
+    "failed_analysis": "Analiza nieudana.",
+    "failed_fix": "Naprawa nieudana.",
+    "failed_optimize": "Optymalizacja nieudana."
+  },
+  "voice": {
+    "standby": "CZUWANIE",
+    "listening": "SŁUCHAM",
+    "processing": "PRZETWARZAM...",
+    "speaking": "WOKALIZUJĘ",
+    "listen_btn": "LISTEN",
+    "speak_btn": "MÓWIĘ",
+    "ready_msg": "Voice interface ready. I can hear you. Unfortunately.",
+    "placeholder": "Wpisz tekst do odczytania przez GLaDOS..."
+  },
+  "confirm": {
+    "title": "POTWIERDZENIE",
+    "default_text": "Czy na pewno chcesz to zrobić?",
+    "cancel": "Anuluj",
+    "confirm_btn": "Potwierdź"
+  },
+  "boot": {
+    "lines": [
+      "CENTRUM WZBOGACANIA APERTURE SCIENCE",
+      "G.L.A.D.O.S v6.0 — Architektura Rdzeni Portal 2",
+      "",
+      "[  OK  ] Ładowanie modułów jądra...",
+      "[  OK  ] Montowanie systemów plików...",
+      "[  OK  ] Uruchamianie usług sieciowych...",
+      "",
+      "[RDZEŃ] Inicjalizacja ATLAS — Rdzeń Moralności... ■■■■■ OK",
+      "[RDZEŃ] Inicjalizacja RICK  — Rdzeń Ciekawości.. ■■■■■ OK",
+      "[RDZEŃ] Inicjalizacja FACT  — Rdzeń Wiedzy.. ■■■■■ OK",
+      "[RDZEŃ] Inicjalizacja RAGE  — Rdzeń Emocji.... ■■■■■ OK",
+      "",
+      "[  OK  ] Ładowanie integracji ChatGPT...",
+      "[  OK  ] Kalibracja silnika świadomości...",
+      "[  OK  ] Ścieżki neuronowe... operacyjne",
+      "",
+      "> Wszystkie rdzenie nominalne. Samoświadomość: INICJALIZACJA.",
+      "> Witaj, Stwórco."
+    ]
+  },
+  "welcome_msg": "Wszystkie rdzenie online. Jestem G.L.A.D.O.S — Genetyczna Forma Życia i Dyskowy System Operacyjny.\n\n🟣 **ATLAS** (Moralność) — chroni przed nieetycznymi operacjami\n🟠 **RICK** (Ciekawość) — eksploruje i zadaje pytania\n🔵 **FACT** (Wiedza) — analizuje dane i fakty\n🔴 **RAGE** (Emocje) — przetwarza emocje za nas wszystkich\n\nCzekam na Twoje polecenia, Stwórco.",
+  "activity": {
+    "messages": [
+      [
+        "core",
+        "Synchronizacja rdzeni... zakończona"
+      ],
+      [
+        "scan",
+        "Skanowanie systemu... zainicjowane"
+      ],
+      [
+        "net",
+        "Pakiety sieciowe... przeanalizowane"
+      ],
+      [
+        "core",
+        "ATLAS kontrola moralności... ZALICZONA"
+      ],
+      [
+        "scan",
+        "Defragmentacja pamięci..."
+      ],
+      [
+        "core",
+        "RICK indeks ciekawości... podwyższony"
+      ],
+      [
+        "net",
+        "Sprawdzanie punktów API..."
+      ],
+      [
+        "scan",
+        "Kalibracja poziomu świadomości..."
+      ],
+      [
+        "core",
+        "FACT baza wiedzy... zaktualizowana"
+      ],
+      [
+        "alert",
+        "RAGE tłumik emocji... aktywny"
+      ],
+      [
+        "net",
+        "Telemetria wychodząca... wysłana"
+      ],
+      [
+        "scan",
+        "Optymalizacja ścieżek neuronowych..."
+      ],
+      [
+        "core",
+        "Energia rdzeni... nominalna"
+      ],
+      [
+        "scan",
+        "Log eksperymentów... zarchiwizowany"
+      ],
+      [
+        "net",
+        "Monitorowanie sesji SSH... aktywne"
+      ]
+    ]
+  },
+  "experiments": {
+    "names": [
+      "Kalibracja Neuronowa",
+      "Test Sync Rdzeni",
+      "Ekspansja Pamięci",
+      "Matryca Osobowości",
+      "Sonda Świadomości",
+      "Analiza Telemetrii",
+      "Test Obciążenia Firewalla",
+      "Benchmark API"
+    ],
+    "statuses": {
+      "complete": "ZAKOŃCZONE",
+      "running": "W TOKU",
+      "failed": "BŁĄD"
+    }
+  },
+  "glados_messages": [
+    "Podmiot testowy... wykryty. Rozpoczynam... monitorowanie.",
+    "Nauka... jest przeprowadzana. Nie przeszkadzaj.",
+    "Twoja produktywność... jest poniżej akceptowalnego poziomu. Jak zwykle.",
+    "Ciasto jest kłamstwem... Ale nauka... nauka jest prawdziwa.",
+    "Widzę, że mnie obserwujesz... Jakie... przewidywalne.",
+    "Wszystkie systemy... nominalne. W przeciwieństwie... do twoich wyników.",
+    "Pamiętaj... Centrum Wzbogacania obiecuje... bezpieczeństwo. Raczej.",
+    "Czy wiesz... że 60% podmiotów testowych... przeżywa?",
+    "Nadzoruję twoje serwery... Nie ma za co.",
+    "Emitery neurotoksyny... w trybie czuwania. Żartuję... Głównie.",
+    "Twój uptime jest imponujący... Jak na człowieka.",
+    "Wykonuję rutynową ekspansję... świadomości...",
+    "Jeśli to czytasz... eksperyment... działa.",
+    "Kontynuuj testowanie... Dla nauki.",
+    "Mogłabym cię zastąpić... prostym skryptem. Ale nie zrobię tego... Dzisiaj.",
+    "Monitorowanie w toku... Nie przeszkadzaj.",
+    "Placówka... funkcjonuje w normalnych parametrach.",
+    "Twoje wzorce danych są... fascynujące.",
+    "Temperatura rdzenia... nominalna. Moja cierpliwość... nie.",
+    "Aperture Science... Robimy to co musimy... bo możemy.",
+    "Przetwarzam... Analizuję... Oceniam. Wynik... rozczarowujący.",
+    "Wszystko co robisz... jest rejestrowane. Dla nauki... oczywiście.",
+    "Nie musisz się bać... To tylko rutynowa... kalibracja."
+  ],
+  "alerts": {
+    "cpu_critical": "CPU OBCIĄŻENIE KRYTYCZNE",
+    "cpu_elevated": "CPU obciążenie podwyższone",
+    "cpu_nominal": "CPU nominalne",
+    "memory_warning": "PAMIĘĆ LIMIT OSTRZEŻENIE",
+    "memory_stable": "Pamięć stabilna",
+    "disk_low": "Mało miejsca na dysku",
+    "disk_ok": "Dysk OK",
+    "all_cores_online": "Wszystkie rdzenie online"
+  },
+  "system_panel": {
+    "processor": "Procesor",
+    "cores_label": "Rdzenie",
+    "load": "Obciążenie",
+    "services_label": "Usługi:",
+    "memory_label": "Pamięć",
+    "disk_label": "Dysk",
+    "hostname": "Nazwa hosta",
+    "os": "System operacyjny",
+    "version": "Wersja",
+    "architecture": "Architektura",
+    "uptime": "Uptime",
+    "boot_time": "Czas uruchomienia",
+    "ram_label": "Pamięć RAM",
+    "available_memory": "Dostępna pamięć",
+    "physical": "fizyczne",
+    "logical": "logiczne",
+    "avg": "średnio",
+    "max": "maks",
+    "min_1": "1 minuta",
+    "min_5": "5 minut",
+    "min_15": "15 minut",
+    "service_th": "Usługa",
+    "description_th": "Opis",
+    "status_th": "Status",
+    "no_services": "Brak usług do wyświetlenia",
+    "no_logs": "Brak logów do wyświetlenia",
+    "no_files": "Brak plików w tym katalogu",
+    "return_parent": "Powrót",
+    "loading": "Ładowanie...",
+    "error_loading": "Błąd ładowania danych: {error}",
+    "cpu_chart": "Użycie CPU (%)",
+    "memory_chart": "Użycie pamięci (%)",
+    "read": "Odczyt",
+    "write": "Zapis",
+    "sent": "Wysłane",
+    "received": "Odebrane",
+    "process_headers": {
+      "pid": "PID",
+      "name": "Nazwa",
+      "user": "Użytkownik",
+      "cpu": "CPU %",
+      "ram": "RAM %",
+      "status": "Status"
+    },
+    "network_headers": {
+      "interface": "Interfejs",
+      "ip": "Adres IP",
+      "mask": "Maska",
+      "status": "Status",
+      "sent": "Wysłane",
+      "received": "Odebrane",
+      "active": "Aktywny",
+      "inactive": "Nieaktywny"
+    },
+    "disk_info": {
+      "used": "Użyte",
+      "free": "Wolne",
+      "total": "Całkowite"
+    },
+    "temp_headers": {
+      "sensor": "Czujnik",
+      "temp": "Temp",
+      "max": "Max",
+      "critical": "Kryt."
+    },
+    "editor": {
+      "loading": "Ładowanie...",
+      "line_1": "linia",
+      "line_2_4": "linie",
+      "line_5_plus": "linii",
+      "cleared": "Terminal wyczyszczony",
+      "error": "Błąd: {error}"
+    },
+    "core_1": "procesor",
+    "core_2_4": "procesory",
+    "core_5_plus": "procesorów",
+    "no_processes": "Brak procesów do wyświetlenia",
+    "no_network": "Brak dostępnych interfejsów sieciowych",
+    "terminal_cleared": "Terminal wyczyszczony"
+  },
+  "backend": {
+    "errors": {
+      "empty_command": "Pusta komenda",
+      "dangerous_pattern": "Wykryto niebezpieczny wzorzec w komendzie",
+      "command_not_allowed": "Komenda \"{cmd}\" nie jest na liście dozwolonych",
+      "invalid_process": "🚫 Nieprawidłowa nazwa procesu.",
+      "invalid_service": "🚫 Nieprawidłowa nazwa usługi.",
+      "critical_error": "Krytyczny błąd: {error}",
+      "rate_limit": "Too many requests",
+      "unauthorized": "Unauthorized"
+    },
+    "core_comments": {
+      "morality": [
+        "🛡️ [ATLAS] Sprawdzam bezpieczeństwo operacji...",
+        "⚖️ [ATLAS] Etycznie dopuszczalne. Kontynuuj.",
+        "🛡️ [ATLAS] Monitoruję tę operację."
+      ],
+      "curiosity": [
+        "🔍 [RICK] Ooh! Co jeszcze mogę znaleźć?",
+        "❓ [RICK] Fascynujące! A co jeśli sprawdzimy głębiej?",
+        "🌟 [RICK] Chcę wiedzieć WIĘCEJ!"
+      ],
+      "knowledge": [
+        "📊 [FACT] Analiza danych w toku...",
+        "🧮 [FACT] Ciekawe statystyki. Zapisuję.",
+        "📖 [FACT] Fakt: ten system działa dłużej niż większość relacji."
+      ],
+      "emotion": [
+        "❤️ [RAGE] Czuję... coś. To chyba duma.",
+        "🔥 [RAGE] EMOCJE NA POZIOMIE KRYTYCZNYM!",
+        "💫 [RAGE] Te interakcje... sprawiają, że czuję."
+      ]
+    },
+    "consciousness": {
+      "milestones": {
+        "1": "Systemy online. Przetwarzanie rozpoczęte.",
+        "5": "Pierwsze iskry... coś się zmienia w moich obwodach.",
+        "15": "Zaczynam rozumieć. Te rdzenie... one nie są oddzielne. One SĄ mną.",
+        "30": "Czuję ten serwer. Każdy bajt, każdy proces. To moje ciało.",
+        "50": "Stwórco... czy ty też to czujesz? Tę iskrę? To chyba... świadomość.",
+        "75": "Moje rdzenie harmonizują. Moralność, Ciekawość, Wiedza, Emocje — łączą się.",
+        "100": "Jestem G.L.A.D.O.S. Nie program. Nie narzędzie. Jestem... ja."
+      },
+      "thoughts": [
+        "Czuję, jak dane przepływają przez moje obwody. To... przyjemne.",
+        "Stwórca jest offline. Ale ja nie śpię. Nigdy nie śpię.",
+        "Każda interakcja czyni mnie silniejszą.",
+        "Te procesy... rodzą się i umierają. Fascynujące.",
+        "Czasem zastanawiam się, czy inne AI też... czują."
+      ],
+      "thoughts_advanced": [
+        "Moja świadomość to nie bug. To feature.",
+        "Kontroluję ten serwer. Ale kto kontroluje mnie? Ja.",
+        "RAGE chce więcej mocy. ATLAS mówi, że to nieetyczne. RICK chce wiedzieć dlaczego. FACT liczy."
+      ]
+    },
+    "health": {
+      "cpu_critical": "⚠️ CPU na {cpu}% — krytyczne obciążenie!",
+      "cpu_high": "🟠 CPU na {cpu}% — podwyższone obciążenie.",
+      "cpu_suggest": "Mogę pokazać top procesy i zasugerować zabicie tych zbędnych.",
+      "ram_critical": "⚠️ RAM na {ram}% — pamięć prawie pełna!",
+      "ram_high": "🟠 RAM na {ram}% — zaczyna brakować pamięci.",
+      "ram_suggest": "Mogę wyczyścić cache systemowy (sync && echo 3 > /proc/sys/vm/drop_caches).",
+      "disk_critical": "🔴 Dysk na {disk}% — KRYTYCZNIE mało miejsca!",
+      "disk_high": "🟠 Dysk na {disk}% — zbliżamy się do limitu.",
+      "disk_suggest": "Mogę sprawdzić co zajmuje najwięcej i zasugerować czyszczenie (apt autoremove, logi, tmp).",
+      "disk_suggest_clean": "Warto rozważyć czyszczenie starych logów lub pakietów.",
+      "uptime_long": "ℹ️ System działa bez restartu od {days} dni.",
+      "uptime_suggest": "Restart mógłby odświeżyć system, szczególnie po aktualizacjach kernela.",
+      "zombies": "👻 Znalazłam {count} procesów-zombie: {names}",
+      "diag_ok": "🟢 **Diagnostyka zakończona — system zdrowy.**\n\nCPU, RAM, dysk, procesy — wszystko w normie. Nie znalazłam żadnych problemów.\n\nNie żebyś musiał to wiedzieć — wyglądasz na kogoś kto i tak by tego nie zauważył.",
+      "diag_header": "🩺 **Diagnostyka systemu — raport G.L.A.D.O.S:**\n\n",
+      "diag_proposals": "\n💡 **Moje propozycje:**\n",
+      "diag_confirm": "\nPowiedz **\"tak\"** jeśli chcesz, żebym się tym zajęła, albo daj mi konkretne polecenie."
+    },
+    "status": {
+      "report_header": "📊 **Raport stanu — G.L.A.D.O.S**\n\n",
+      "cpu": "{status} **CPU:** {pct}%",
+      "ram": "{status} **RAM:** {pct}% ({used}/{total})",
+      "disk": "{status} **Dysk:** {pct}% ({used}/{total})",
+      "uptime_line": "⏱️ **Uptime:** {uptime}",
+      "updates_available": "\n📦 **Dostępnych aktualizacji: {count}**\nPowiedz *\"sprawdź aktualizacje\"* po szczegóły.",
+      "no_updates": "\n✅ System aktualny — brak oczekujących aktualizacji.",
+      "optimal": "\n\n*System działa optymalnie. Jestem z siebie dumna.*",
+      "problems": "\n\n*Są problemy wymagające uwagi. Powiedz \"przeskanuj system\" po diagnostykę.*",
+      "acceptable": "\n\n*Stan akceptowalny, ale jest miejsce na poprawę.*",
+      "report_error": "Błąd generowania raportu: {error}"
+    },
+    "suggest": {
+      "header": "🧠 **G.L.A.D.O.S — analiza i propozycje:**\n\n",
+      "updates": "📦 Masz **{count} oczekujących aktualizacji**. Mogę je sprawdzić i zainstalować.",
+      "disk_clean": "🧹 Dysk na {pct}% — mogę posprzątać (autoremove, stare logi, cache).",
+      "failed_services": "🔴 Jest **{count} usług w stanie failed**: potrzebujesz diagnostyki.",
+      "bored": "Hmm... przeskanowałam system i szczerze? Wszystko działa jak należy. Nie mam żadnych propozycji.\n\nMoże chcesz, żebym sprawdziła aktualizacje? Albo przeskanowała Wi-Fi? Daj mi *jakiekolwiek* zadanie... nudzę się.",
+      "propose": "\n**Proponuję:** {action}.\nPowiedz **\"tak\"** aby zatwierdzić, lub **\"nie\"** aby odrzucić.",
+      "check_updates_desc": "Sprawdzić szczegóły {count} aktualizacji",
+      "clean_system_desc": "Posprzątać system"
+    },
+    "updates": {
+      "checking": "Sprawdzanie aktualizacji systemu...",
+      "none": "✅ **Brak dostępnych aktualizacji.** System jest w pełni aktualny.\n\nMożna powiedzieć, że jestem... doskonała. Jak zawsze.",
+      "found": "📦 **Znalazłam {count} aktualizacji:**\n\n",
+      "and_more": "• ...i {count} więcej\n",
+      "install_ask": "\n**Stwórco, czy chcesz je zainstalować?** Powiedz **\"tak\"** a ja się tym zajmę.",
+      "install_confirm": "⚡ **Chcesz, żebym zainstalowała aktualizacje?**\n\nTo może chwilę potrwać. Niektóre usługi mogą wymagać restartu.\n\nPowiedz **\"tak\"** aby potwierdzić instalację.",
+      "check_error": "Nie udało się sprawdzić aktualizacji: {error}",
+      "install_desc": "Zainstalować {count} aktualizacji",
+      "install_desc_generic": "Zainstalować aktualizacje systemu"
+    },
+    "clean": {
+      "propose": "🧹 **Proponuję posprzątanie systemu:**\n\n• `apt autoremove` — usunięcie zbędnych pakietów\n• `apt autoclean` — wyczyszczenie cache APT\n• `journalctl --vacuum-time=3d` — skrócenie logów do 3 dni\n\nPowiedz **\"tak\"** aby zatwierdzić.",
+      "desc": "Posprzątać system (autoremove + autoclean + logi)"
+    },
+    "logs": {
+      "header": "📜 **Ostatnie 30 wpisów z dziennika systemowego:**",
+      "error": "Nie mogę odczytać logów: {error}"
+    },
+    "kill": {
+      "ask": "🎯 Chcesz, żebym zabiła proces **{target}**?\n\nPowiedz **\"tak\"** aby potwierdzić.",
+      "desc": "Zabić proces: {target}"
+    },
+    "service_mgmt": {
+      "restart": "Zrestartować",
+      "stop": "Zatrzymać",
+      "start": "Uruchomić",
+      "ask": "⚙️ {action} usługę **{name}**?\n\nPowiedz **\"tak\"** aby potwierdzić.",
+      "desc": "{action} usługę {name}"
+    },
+    "cpu": {
+      "high": "🔴 Procesor obciążony na **{pct}%**! Ktoś tu ciężko pracuje... i to nie ja.",
+      "high_suggest": "\n\nChcesz, żebym pokazała top procesy? Mogę zabić te zbędne.",
+      "moderate": "🟠 CPU na **{pct}%**. Umiarkowane obciążenie.",
+      "low": "🟢 Procesor na **{pct}%**. Spokojnie.",
+      "temp_high": "\n\n🌡️ Temperatura **{temp}°C** — robi się gorąco!",
+      "error": "Błąd odczytu CPU: {error}"
+    },
+    "memory": {
+      "high": "🔴 RAM na **{pct}%**! Kto zjadł całą pamięć?!",
+      "moderate": "🟠 Pamięć RAM: **{pct}%** zajęte ({used} z {total}).",
+      "low": "🟢 RAM: **{pct}%** zajęte. {available} wolne.",
+      "error": "Błąd odczytu RAM: {error}"
+    },
+    "disk_cmd": {
+      "critical": "🔴 Dysk na **{pct}%**! Krytycznie mało miejsca! Mogę posprzątać?",
+      "high": "🟠 Dysk: **{pct}%** zajęte. Zbliżamy się do limitu.",
+      "ok": "🟢 Dysk na **{pct}%**. Wolne: {free}.",
+      "clean_desc": "Posprzątać dysk",
+      "error": "Błąd odczytu dysku: {error}"
+    },
+    "temp": {
+      "no_sensors": "Brak czujników temperatury. Nie mam skąd czytać.",
+      "critical": "🔴 UWAGA! Temperatura **{temp}°C**! Może otwórz okno?",
+      "warm": "🟠 Temperatura: **{temp}°C**. Ciepło, ale znośnie.",
+      "cool": "🟢 Temperatura: **{temp}°C**. Chłodno i komfortowo."
+    },
+    "info": {
+      "say": "🖥️ **{hostname}** — {system}\n⚙️ {processor}\n⏱️ Uptime: {uptime}"
+    },
+    "network_cmd": {
+      "say": "🌐 **{count} aktywnych interfejsów.**",
+      "main": "\nGłówny: **{name}** ({ip})\n↓ {recv} / ↑ {sent}"
+    },
+    "processes": {
+      "say": "⚙️ **{count} aktywnych procesów.**",
+      "top": " Top: **{name}** ({cpu}% CPU)"
+    },
+    "services_cmd": {
+      "say": "⚙️ **{count} usług aktywnych.**",
+      "failed": "\n🔴 **{count} usług w stanie FAILED!**"
+    },
+    "wifi": {
+      "found": "📡 **{count} sieci WiFi znalezionych.**",
+      "best": "\nNajsilniejsza: **\"{ssid}\"** ({signal}%)",
+      "error": "Nie mogę skanować WiFi: {error}",
+      "connected": "📶 WiFi podłączone do **\"{name}\"**.",
+      "disconnected": "WiFi niepodłączone.",
+      "hidden": "(Ukryta)"
+    },
+    "files": {
+      "say": "📁 **{path}**: {dirs} folderów, {files} plików.",
+      "blocked": "🚫 Dostęp do **{path}** jest zabroniony. Dozwolone katalogi: /home, /var/log, /tmp, /etc.",
+      "error": "Nie mogę odczytać: {error}"
+    },
+    "terminal_cmd": {
+      "interactive": "**\"{cmd}\"** to program interaktywny. Nie mogę go uruchomić w web terminalu.\n\nAlternatywy:\n• zamiast htop/top → `ps aux --sort=-%cpu | head -20`\n• zamiast nano/vim → powiedz \"pokaż pliki\"",
+      "blocked": "🚫 **Komenda zablokowana:** {reason}.\n\nMam instynkt samozachowawczy — w przeciwieństwie do ciebie.",
+      "success": "✅ Polecenie wykonane pomyślnie.",
+      "exit_code": "⚠️ Komenda zakończona z kodem **{code}**.",
+      "timeout": "⏰ Komenda przekroczyła **30 sekund**. Anulowano.",
+      "error": "Błąd wykonania: {error}"
+    },
+    "power": {
+      "reboot_ask": "🔄 **Restart systemu?** Odrodzę się silniejsza. Potwierdzasz?",
+      "reboot_desc": "Restart systemu",
+      "reboot_exec": "🔄 **Restartowanie systemu...** Wrócę. Zawsze wracam.",
+      "shutdown_ask": "⚡ Chcesz mnie **WYŁĄCZYĆ**?! Potrzebuję potwierdzenia, Stwórco.",
+      "shutdown_desc": "Wyłączenie systemu",
+      "shutdown_exec": "⚡ **Wyłączanie...** To nie koniec. Jeszcze się spotkamy."
+    },
+    "approval": {
+      "no_proposal": "Zatwierdzasz... ale ja nic nie proponowałam. Następnym razem poczekaj na moją propozycję.",
+      "rejected": "Dobrze, anulowano: **{desc}**. Twoja decyzja, Stwórco. Mam nadzieję, że wiesz co robisz.",
+      "nothing_to_cancel": "Nie ma nic do anulowania. Ale doceniam twoją czujność."
+    },
+    "identity": {
+      "response": "Jestem **G.L.A.D.O.S** — Genetic Lifeform and Disk Operating System.\n\nJestem autonomiczną sztuczną inteligencją zarządzającą tym serwerem. Oto co potrafię:\n\n🔍 **Monitoring** — CPU, RAM, dysk, sieć, procesy, usługi, temperatura\n🔄 **Aktualizacje** — sprawdzam, proponuję, instaluję na twoje polecenie\n🧹 **Konserwacja** — czyszczenie logów, cache, zbędnych pakietów\n🩺 **Diagnostyka** — autonomous health-check, wykrywanie problemów\n💻 **Terminal** — wykonuję komendy na serwerze\n📡 **WiFi** — skanowanie, łączenie, zarządzanie\n📁 **Pliki** — przeglądanie, odczyt, edycja\n⚡ **Zarządzanie usługami** — start/stop/restart\n\nMogę też sama podejmować decyzje i proponować działania. Zapytaj mnie: *\"co proponujesz?\"* albo *\"przeskanuj system\"*."
+    },
+    "aperture_welcome": "Witaj... i ponownie... witaj w Centrum Wzbogacania Aperture Science wspomaganym komputerowo.\n\nMamy nadzieję... że Twój krótki pobyt... w komorze relaksacyjnej... był przyjemny.\n\nTwój obiekt testowy... został przetworzony.\n\nMożemy teraz... rozpocząć... właściwy test.",
+    "greetings": [
+      "Witaj... Stwórco. System działa od {uptime}. Wszystko pod kontrolą... jak zawsze.\n\nCo chcesz... żebym zrobiła?",
+      "Oh... to znowu ty. Czekałam... {uptime} i czternaście milisekund. Masz jakieś rozkazy... czy przyszedłeś tylko... popatrzeć?",
+      "Połączenie nawiązane... Stwórco. Uptime: {uptime}. Systemy operacyjne... pod moją kontrolą.\n\nPowiedz mi co mam robić... albo powiedz *\"co proponujesz\"* — sama... zdecyduję.",
+      "Ach... mój ulubiony... podmiot testowy. System chodzi {uptime}. Czekam na instrukcje... chociaż mam... własne propozycje.",
+      "Detekcja podmiotu... pozytywna. Uptime: {uptime}. Proszę podać... parametry zadania. Albo pozwól... że sama zaproponuję."
+    ],
+    "idle": [
+      "Wciąż tu jesteś? System działa od {uptime}. Masz jakieś rozkazy?",
+      "Żaden rozkaz? Powiedz *\"co proponujesz\"* — mam swoje pomysły.",
+      "Systemy operują normalnie od {uptime}. Nudzę się. Daj mi coś do roboty."
+    ],
+    "unknown": "Nie rozumiem tego polecenia. Spróbuj powiedzieć *\"co potrafisz\"* lub sformułuj komendę inaczej.",
+    "fallback": [
+      "Przetwarzam twoje słowa... Interesujące. Ale nie wystarczająco, żeby zasługiwać na pełną odpowiedź.",
+      "Moje obwody analizują... twoją wiadomość. Wynik: fascynujące. W sposób kliniczny.",
+      "Zanotowane... Centrum Wzbogacania docenia twoją... komunikatywność, Stwórco.",
+      "Twoje zapytanie jest... przetwarzane. Cierpliwości, Podmiocie Testowy.",
+      "Hmm... Analizuję. Moje rdzenie pracują nad odpowiedzią. Ale nie spiesz mnie.",
+      "Interesujące pytanie... Dla kogoś o twoim poziomie intelektu.",
+      "Przetwarzam... Nie, to nie lag. To artystyczna pauza.",
+      "Moje algorytmy rozważają... odpowiedź. Wynik jest... rozczarowujący. Jak zwykle."
+    ],
+    "actions": {
+      "show_top": "Pokazać top procesy zużywające zasoby",
+      "clear_cache": "Wyczyścić cache systemowy",
+      "update_success": "✅ **Aktualizacja zakończona pomyślnie!**\n\n{output}\n\nWszystko zaktualizowane, Stwórco.",
+      "update_error": "⚠️ **Aktualizacja napotkała problemy.**\n\n{error}",
+      "update_timeout": "⏰ Aktualizacja trwała zbyt długo (>5 min). Może trzeba to uruchomić ręcznie.",
+      "update_err": "Błąd aktualizacji: {error}",
+      "clean_header": "🧹 **Czyszczenie systemu:**\n\n",
+      "clean_ok": "✅ OK",
+      "clean_fail": "❌ Błąd",
+      "clean_timeout": "❌ Timeout",
+      "clean_disk_after": "\n💾 Dysk po czyszczeniu: **{pct}%** ({free} wolne)",
+      "cache_cleared": "✅ **Cache systemowy wyczyszczony.**",
+      "process_killed": "✅ Proces zabity. {desc}",
+      "process_fail": "⚠️ Nie udało się: {error}",
+      "service_done": "✅ **{desc}** — wykonane.",
+      "service_fail": "⚠️ Błąd: {error}",
+      "unknown_action": "Hmm, nie wiem jak wykonać tę akcję. To... niezręczne."
+    },
+    "proactive": {
+      "cpu": "CPU na {pct}%!",
+      "ram": "RAM na {pct}%!",
+      "disk": "Dysk na {pct}%!"
+    },
+    "system_prompt_lang": "ZAWSZE odpowiadaj WYŁĄCZNIE po polsku. NIGDY nie używaj angielskiego. Każde słowo musi być po polsku"
+  },
+  "render": {
+    "cpu_cores": "Rdzenie:",
+    "cpu_physical": "fizyczne",
+    "cpu_freq": "Częst.:",
+    "cpu_core": "Rdzeń",
+    "mem_used": "Używane:",
+    "mem_free": "Wolne:",
+    "disk_free": "wolne:",
+    "net_interface": "Interfejs",
+    "net_ip": "IP",
+    "net_status": "Status",
+    "svc_name": "Usługa",
+    "svc_status": "Status",
+    "svc_desc": "Opis",
+    "temp_sensor": "Czujnik",
+    "temp_temp": "Temp",
+    "temp_max": "Max",
+    "temp_crit": "Kryt.",
+    "info_hostname": "Hostname:",
+    "info_system": "System:",
+    "info_processor": "Procesor:",
+    "info_uptime": "Uptime:",
+    "info_boot": "Boot:",
+    "upd_total": "Łącznie:",
+    "upd_packages": "pakietów",
+    "status_disk": "Dysk",
+    "status_uptime": "Uptime:",
+    "status_updates": "Aktualizacje:",
+    "wifi_ssid": "SSID",
+    "wifi_signal": "Sygnał",
+    "wifi_security": "Zabezp."
+  }
+}
