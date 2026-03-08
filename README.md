@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.1.2-00e5ff?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.1.3-00e5ff?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/Codename-GLaDOS%20Voice%20Reborn-7c4dff?style=for-the-badge" alt="Codename">
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776ab?style=for-the-badge&logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/Flask-3.0%2B-000000?style=for-the-badge&logo=flask" alt="Flask">
@@ -251,7 +251,8 @@ The panel includes multiple security layers:
 
 | Version | Codename | Changes |
 |---------|----------|---------|
-| **6.1.2** | GLaDOS Voice Reborn | Polish TTS (Paulina/Zofia), g4f provider fix, full UI polonization |
+| **6.1.3** | GLaDOS Voice Reborn | Auto semantic versioning (git pre-commit hook), enhanced installer, version_bump.py |
+| **6.1.2** | — | Polish TTS (Paulina/Zofia), g4f provider fix, full UI polonization |
 | **6.1.1** | — | g4f provider chain (OperaAria/Yqcloud/ApiAirforce), Polish fallback |
 | **6.1.0** | — | Full polonization: boot, terminal, activity, alerts, codelab |
 | **6.0.2** | — | Auto-speak, speech recognition changed to pl-PL |
