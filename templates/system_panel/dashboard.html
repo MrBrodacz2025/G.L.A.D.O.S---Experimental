@@ -3076,13 +3076,29 @@
                 }
 
                 // Start YouTube audio, begin sync when video plays
-                if (ytReady) {
+                function launchYT() {
                     playYouTubeAudio(song.youtubeId, () => {
                         if (mySession !== singSessionId) return;
                         lyricSyncRAF = requestAnimationFrame(syncLyrics);
                     });
+                }
+                if (ytReady) {
+                    launchYT();
                 } else {
-                    lyricSyncRAF = requestAnimationFrame(syncLyrics);
+                    // YouTube API not ready yet — wait for it (up to 10s)
+                    let ytWaitCount = 0;
+                    const ytWait = setInterval(() => {
+                        ytWaitCount++;
+                        if (ytReady) {
+                            clearInterval(ytWait);
+                            if (mySession === singSessionId && isSinging) launchYT();
+                        } else if (ytWaitCount > 50) {
+                            clearInterval(ytWait);
+                            // Fallback: start lyrics without audio sync
+                            lyricSyncRAF = requestAnimationFrame(syncLyrics);
+                        }
+                    }, 200);
+                    singLyricsTimers.push(ytWait);
                 }
             }, 3000);
         }

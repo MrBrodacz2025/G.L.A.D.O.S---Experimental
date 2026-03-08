@@ -141,11 +141,12 @@ def set_security_headers(response):
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.youtube.com https://s.ytimg.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
         "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; "
-        "img-src 'self' data:; "
+        "img-src 'self' data: https://i.ytimg.com; "
         "connect-src 'self'; "
+        "frame-src https://www.youtube.com https://www.youtube-nocookie.com; "
         "frame-ancestors 'none'"
     )
     response.headers['Permissions-Policy'] = 'camera=(), microphone=(self), geolocation=()'
@@ -1944,21 +1945,26 @@ def memory_info_api():
 def disk_info_api():
     try:
         partitions = []
+        seen_mountpoints = set()
         for partition in psutil.disk_partitions():
             try:
-                if partition.mountpoint == '/' or 'sda' in partition.device:
-                    usage = psutil.disk_usage(partition.mountpoint)
-                    partitions.append({
-                        'device': partition.device,
-                        'mountpoint': partition.mountpoint,
-                        'total': _get_size(usage.total),
-                        'used': _get_size(usage.used),
-                        'free': _get_size(usage.free),
-                        'percentage': usage.percent
-                    })
-                    if partition.mountpoint == '/':
-                        break
-            except PermissionError:
+                mp = partition.mountpoint
+                # Skip virtual/snap/docker filesystems and duplicates
+                if mp in seen_mountpoints:
+                    continue
+                if any(mp.startswith(p) for p in ('/snap', '/sys', '/proc', '/run', '/dev')):
+                    continue
+                seen_mountpoints.add(mp)
+                usage = psutil.disk_usage(mp)
+                partitions.append({
+                    'device': partition.device,
+                    'mountpoint': mp,
+                    'total': _get_size(usage.total),
+                    'used': _get_size(usage.used),
+                    'free': _get_size(usage.free),
+                    'percentage': usage.percent
+                })
+            except Exception:
                 continue
         
         disk_io = psutil.disk_io_counters()
