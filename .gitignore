@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 *.zip
 *.bak_*
+venv/
+start_glados.sh
