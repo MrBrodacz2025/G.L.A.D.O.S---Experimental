@@ -71,12 +71,13 @@ function getProgressClass(percentage) {
 // Overview Functions
 async function loadOverview() {
     try {
-        const [info, cpu, memory, disk] = await Promise.all([
+        const [info, stats] = await Promise.all([
             fetch('/api/system/info').then(r => r.json()),
-            fetch('/api/system/cpu').then(r => r.json()),
-            fetch('/api/system/memory').then(r => r.json()),
-            fetch('/api/system/disk').then(r => r.json())
+            fetch('/api/system/stats').then(r => r.json())
         ]);
+        const cpu = stats.cpu;
+        const memory = stats.memory;
+        const disk = stats.disk;
 
         // Update header
         document.getElementById('header-hostname').textContent = info.hostname || 'System Panel';
@@ -340,11 +341,10 @@ async function startHistoryCollection() {
     
     async function collectData() {
         try {
-            const [cpu, memory, disk] = await Promise.all([
-                fetch('/api/system/cpu').then(r => r.json()),
-                fetch('/api/system/memory').then(r => r.json()),
-                fetch('/api/system/disk').then(r => r.json())
-            ]);
+            const stats = await fetch('/api/system/stats').then(r => r.json());
+            const cpu = stats.cpu;
+            const memory = stats.memory;
+            const disk = stats.disk;
 
             const now = new Date().toLocaleTimeString();
             
@@ -392,7 +392,7 @@ async function startHistoryCollection() {
     }
 
     collectData();
-    historyInterval = setInterval(collectData, 2000);
+    historyInterval = setInterval(collectData, 4000);
 }
 
 function updateCharts() {

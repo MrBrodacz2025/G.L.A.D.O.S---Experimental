@@ -1724,6 +1724,91 @@ def _get_processor_name():
 
 
 # ============================================
+# Metrics Cache (avoid redundant psutil calls)
+# ============================================
+class MetricsCache:
+    """Cache system metrics for a short TTL to avoid repeated expensive psutil calls."""
+    def __init__(self, ttl=2.0):
+        self.ttl = ttl
+        self._cache = {}
+        self._lock = threading.Lock()
+
+    def get(self, key, fetch_fn):
+        now = time.time()
+        with self._lock:
+            entry = self._cache.get(key)
+            if entry and (now - entry['ts']) < self.ttl:
+                return entry['data']
+        data = fetch_fn()
+        with self._lock:
+            self._cache[key] = {'data': data, 'ts': now}
+        return data
+
+_metrics_cache = MetricsCache(ttl=2.0)
+
+
+def _fetch_cpu_data():
+    cpu_freq = psutil.cpu_freq()
+    cpu_percent = psutil.cpu_percent(interval=1, percpu=True)
+    cpu_total = sum(cpu_percent) / len(cpu_percent) if cpu_percent else 0
+    load_avg = os.getloadavg() if hasattr(os, 'getloadavg') else (0, 0, 0)
+    temp = _get_cpu_temp()
+    return {
+        'physical_cores': psutil.cpu_count(logical=False),
+        'total_cores': psutil.cpu_count(logical=True),
+        'current_frequency': f"{cpu_freq.current:.2f} MHz" if cpu_freq else "N/A",
+        'cpu_usage_total': round(cpu_total, 1),
+        'cpu_usage_per_core': cpu_percent,
+        'load_average': {'1min': round(load_avg[0], 2), '5min': round(load_avg[1], 2), '15min': round(load_avg[2], 2)},
+        'temperature': round(temp, 1) if temp else None,
+        'top_processes': _get_top_processes()
+    }
+
+
+def _fetch_memory_data():
+    svmem = psutil.virtual_memory()
+    swap = psutil.swap_memory()
+    return {
+        'total': _get_size(svmem.total),
+        'available': _get_size(svmem.available),
+        'used': _get_size(svmem.used),
+        'percentage': svmem.percent,
+        'swap_total': _get_size(swap.total),
+        'swap_used': _get_size(swap.used),
+        'swap_percentage': swap.percent
+    }
+
+
+def _fetch_disk_data():
+    partitions = []
+    seen_mountpoints = set()
+    for partition in psutil.disk_partitions():
+        try:
+            mp = partition.mountpoint
+            if mp in seen_mountpoints:
+                continue
+            if any(mp.startswith(p) for p in ('/snap', '/sys', '/proc', '/run', '/dev')):
+                continue
+            seen_mountpoints.add(mp)
+            usage = psutil.disk_usage(mp)
+            partitions.append({
+                'device': partition.device,
+                'mountpoint': mp,
+                'total': _get_size(usage.total),
+                'used': _get_size(usage.used),
+                'free': _get_size(usage.free),
+                'percentage': usage.percent
+            })
+        except Exception:
+            continue
+    disk_io = psutil.disk_io_counters()
+    return {
+        'partitions': partitions,
+        'io': {'read_count': disk_io.read_count, 'write_count': disk_io.write_count}
+    }
+
+
+# ============================================
 # Version API
 # ============================================
 
@@ -1902,21 +1987,7 @@ def system_info_api():
 @require_auth
 def cpu_info_api():
     try:
-        cpu_freq = psutil.cpu_freq()
-        cpu_percent = psutil.cpu_percent(interval=1, percpu=True)
-        load_avg = os.getloadavg() if hasattr(os, 'getloadavg') else (0, 0, 0)
-        temp = _get_cpu_temp()
-        
-        return jsonify({
-            'physical_cores': psutil.cpu_count(logical=False),
-            'total_cores': psutil.cpu_count(logical=True),
-            'current_frequency': f"{cpu_freq.current:.2f} MHz" if cpu_freq else "N/A",
-            'cpu_usage_total': psutil.cpu_percent(interval=1),
-            'cpu_usage_per_core': cpu_percent,
-            'load_average': {'1min': round(load_avg[0], 2), '5min': round(load_avg[1], 2), '15min': round(load_avg[2], 2)},
-            'temperature': round(temp, 1) if temp else None,
-            'top_processes': _get_top_processes()
-        })
+        return jsonify(_metrics_cache.get('cpu', _fetch_cpu_data))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1925,17 +1996,7 @@ def cpu_info_api():
 @require_auth
 def memory_info_api():
     try:
-        svmem = psutil.virtual_memory()
-        swap = psutil.swap_memory()
-        return jsonify({
-            'total': _get_size(svmem.total),
-            'available': _get_size(svmem.available),
-            'used': _get_size(svmem.used),
-            'percentage': svmem.percent,
-            'swap_total': _get_size(swap.total),
-            'swap_used': _get_size(swap.used),
-            'swap_percentage': swap.percent
-        })
+        return jsonify(_metrics_cache.get('memory', _fetch_memory_data))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1944,34 +2005,20 @@ def memory_info_api():
 @require_auth
 def disk_info_api():
     try:
-        partitions = []
-        seen_mountpoints = set()
-        for partition in psutil.disk_partitions():
-            try:
-                mp = partition.mountpoint
-                # Skip virtual/snap/docker filesystems and duplicates
-                if mp in seen_mountpoints:
-                    continue
-                if any(mp.startswith(p) for p in ('/snap', '/sys', '/proc', '/run', '/dev')):
-                    continue
-                seen_mountpoints.add(mp)
-                usage = psutil.disk_usage(mp)
-                partitions.append({
-                    'device': partition.device,
-                    'mountpoint': mp,
-                    'total': _get_size(usage.total),
-                    'used': _get_size(usage.used),
-                    'free': _get_size(usage.free),
-                    'percentage': usage.percent
-                })
-            except Exception:
-                continue
-        
-        disk_io = psutil.disk_io_counters()
-        return jsonify({
-            'partitions': partitions,
-            'io': {'read_count': disk_io.read_count, 'write_count': disk_io.write_count}
-        })
+        return jsonify(_metrics_cache.get('disk', _fetch_disk_data))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/system/stats')
+@require_auth
+def system_stats_api():
+    """Unified endpoint: returns CPU + Memory + Disk in one call (cached)."""
+    try:
+        cpu = _metrics_cache.get('cpu', _fetch_cpu_data)
+        mem = _metrics_cache.get('memory', _fetch_memory_data)
+        disk = _metrics_cache.get('disk', _fetch_disk_data)
+        return jsonify({'cpu': cpu, 'memory': mem, 'disk': disk})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

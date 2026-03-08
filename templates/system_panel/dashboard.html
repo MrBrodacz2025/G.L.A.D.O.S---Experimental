@@ -131,9 +131,7 @@
         .glass, .dash-card, .metric-card, .confirm-dialog, .voice-log,
         .score-item, .data-card, .updates-list, .status-overview,
         .alert-item-v5, .exp-entry, .module-card {
-            background: var(--glass);
-            backdrop-filter: blur(var(--blur));
-            -webkit-backdrop-filter: blur(var(--blur));
+            background: var(--surface);
             border: 1px solid var(--glass-border);
             box-shadow: var(--shadow-sm), inset 0 1px 0 var(--glass-highlight);
         }
@@ -166,8 +164,7 @@
             font-family: 'Share Tech Mono', monospace; font-size: 10px;
             color: var(--text-dim); padding: 3px 10px;
             border: 1px solid var(--glass-border); border-radius: 20px;
-            background: var(--glass);
-            backdrop-filter: blur(10px);
+            background: var(--surface);
         }
         .topbar-center {
             display: flex; align-items: center; gap: 20px;
@@ -193,8 +190,7 @@
             font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text-dim);
         }
         .topbar-right select {
-            background: var(--glass) !important;
-            backdrop-filter: blur(10px);
+            background: var(--surface) !important;
             color: var(--text) !important;
             border: 1px solid var(--glass-border) !important;
             border-radius: 20px !important;
@@ -217,8 +213,6 @@
             padding: 18px 24px;
             background: rgba(8, 8, 22, 0.5);
             border-bottom: 1px solid var(--glass-border);
-            backdrop-filter: blur(var(--blur));
-            -webkit-backdrop-filter: blur(var(--blur));
         }
         .core-indicator {
             display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -309,9 +303,7 @@
             display: flex; flex-direction: column; align-items: center;
             padding: 28px 18px;
             border-right: 1px solid var(--glass-border);
-            background: rgba(8, 8, 22, 0.4);
-            backdrop-filter: blur(var(--blur));
-            -webkit-backdrop-filter: blur(var(--blur));
+            background: rgba(8, 8, 22, 0.6);
             overflow-y: auto;
         }
         .eye-container { position: relative; width: 168px; height: 168px; margin-bottom: 24px; }
@@ -422,8 +414,7 @@
             padding: 5px 16px;
             border: 1px solid var(--glass-border);
             border-radius: 20px;
-            background: var(--glass);
-            backdrop-filter: blur(10px);
+            background: var(--surface);
             transition: all var(--transition);
         }
 
@@ -467,7 +458,6 @@
             font-family: 'Share Tech Mono', monospace; font-size: 13px;
             color: var(--accent); text-align: center;
             animation: milestone-glow 3s ease-in-out infinite;
-            backdrop-filter: blur(10px);
         }
         .milestone-banner.active { display: block; }
         @keyframes milestone-glow {
@@ -477,8 +467,7 @@
 
         .pending-banner {
             display: none; padding: 12px 18px;
-            background: var(--glass);
-            backdrop-filter: blur(var(--blur));
+            background: var(--surface);
             border: 1px solid rgba(255,183,77,0.2);
             border-radius: var(--radius-md); margin: 10px 18px 0;
         }
@@ -538,9 +527,7 @@
             box-shadow: 0 0 14px var(--accent2-glow);
         }
         .msg-content {
-            background: var(--glass);
-            backdrop-filter: blur(var(--blur));
-            -webkit-backdrop-filter: blur(var(--blur));
+            background: var(--surface);
             border: 1px solid var(--glass-border);
             border-radius: var(--radius-lg);
             padding: 12px 18px; font-size: 13px; line-height: 1.7;
@@ -608,14 +595,12 @@
         .chat-input-area {
             padding: 14px 18px;
             border-top: 1px solid var(--glass-border);
-            background: rgba(8, 8, 22, 0.6);
-            backdrop-filter: blur(var(--blur-heavy));
+            background: rgba(8, 8, 22, 0.85);
         }
         .input-wrapper { display: flex; gap: 12px; align-items: center; }
         .chat-input {
             flex: 1;
-            background: var(--glass);
-            backdrop-filter: blur(10px);
+            background: var(--surface);
             border: 1px solid var(--glass-border);
             border-radius: var(--radius-xl);
             padding: 12px 20px; color: var(--text);
@@ -630,8 +615,7 @@
         .send-btn {
             width: 44px; height: 44px; border-radius: 50%;
             border: 2px solid var(--accent);
-            background: var(--glass);
-            backdrop-filter: blur(10px);
+            background: var(--surface);
             color: var(--accent); font-size: 16px; cursor: pointer;
             display: flex; align-items: center; justify-content: center;
             transition: all var(--transition-spring);
@@ -647,8 +631,7 @@
         .quick-commands { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
         .quick-cmd {
             padding: 5px 14px;
-            background: var(--glass);
-            backdrop-filter: blur(10px);
+            background: var(--surface);
             border: 1px solid var(--glass-border);
             border-radius: 20px; color: var(--text-dim); font-size: 11px;
             cursor: pointer; transition: all var(--transition);
@@ -738,10 +721,9 @@
         /* === MODULE NAVIGATION === */
         .module-nav {
             display: flex; padding: 0 24px;
-            background: rgba(8, 8, 22, 0.5);
+            background: rgba(8, 8, 22, 0.6);
             border-bottom: 1px solid var(--glass-border);
             gap: 4px; z-index: 5;
-            backdrop-filter: blur(var(--blur));
         }
         .module-tab {
             padding: 12px 20px; font-family: 'Share Tech Mono', monospace;
@@ -875,7 +857,6 @@
         .terminal-module {
             flex: 1; display: flex; flex-direction: column;
             background: rgba(0,0,0,0.4);
-            backdrop-filter: blur(var(--blur));
             font-family: 'Share Tech Mono', monospace;
         }
         .terminal-header {
@@ -897,7 +878,6 @@
             display: flex; align-items: center; gap: 10px; padding: 14px 20px;
             border-top: 1px solid rgba(0,229,255,0.1);
             background: rgba(0,0,0,0.5);
-            backdrop-filter: blur(10px);
         }
         .terminal-prompt { color: var(--accent); font-size: 13px; white-space: nowrap; }
         .terminal-input {
@@ -920,7 +900,6 @@
         .codelab-textarea {
             width: 100%; height: 100%; min-height: 300px;
             background: rgba(0,0,0,0.3);
-            backdrop-filter: blur(10px);
             border: 1px solid var(--glass-border);
             border-radius: var(--radius-md); padding: 14px; color: #00ff41;
             font-family: 'Share Tech Mono', monospace; font-size: 12px;
@@ -938,8 +917,7 @@
         .codelab-btn {
             padding: 8px 20px; border-radius: 20px;
             border: 1px solid rgba(0,229,255,0.3);
-            background: var(--glass);
-            backdrop-filter: blur(10px);
+            background: var(--surface);
             color: var(--accent);
             font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: 1px;
             cursor: pointer; transition: all var(--transition-spring);
@@ -1007,8 +985,7 @@
         .voice-btn {
             padding: 12px 28px; border-radius: 24px;
             border: 1px solid rgba(0,229,255,0.3);
-            background: var(--glass);
-            backdrop-filter: blur(var(--blur));
+            background: var(--surface);
             color: var(--accent);
             font-family: 'Share Tech Mono', monospace; font-size: 12px; letter-spacing: 1px;
             cursor: pointer; transition: all var(--transition-spring);
@@ -1034,8 +1011,7 @@
         .voice-input-area { display: flex; gap: 12px; margin-top: 20px; width: 100%; max-width: 640px; }
         .voice-text-input {
             flex: 1;
-            background: var(--glass);
-            backdrop-filter: blur(10px);
+            background: var(--surface);
             border: 1px solid var(--glass-border);
             border-radius: var(--radius-xl); padding: 12px 18px;
             color: var(--text);
@@ -1444,6 +1420,10 @@
         };
 
         // ==================== PARTICLES ====================
+        // Track page visibility for pausing heavy animations
+        let _pageVisible = true;
+        document.addEventListener('visibilitychange', () => { _pageVisible = !document.hidden; });
+
         function initParticles() {
             const canvas = document.getElementById('particles');
             const ctx = canvas.getContext('2d');
@@ -1456,7 +1436,8 @@
             resize();
             window.addEventListener('resize', resize);
 
-            for (let i = 0; i < 50; i++) {
+            // Reduced from 50 to 25 particles for lower CPU usage
+            for (let i = 0; i < 25; i++) {
                 particles.push({
                     x: Math.random() * w, y: Math.random() * h,
                     vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3,
@@ -1467,6 +1448,7 @@
             }
 
             function draw() {
+                if (!_pageVisible) { requestAnimationFrame(draw); return; }
                 ctx.clearRect(0, 0, w, h);
                 particles.forEach(p => {
                     p.x += p.vx; p.y += p.vy;
@@ -1480,17 +1462,17 @@
                 });
                 ctx.globalAlpha = 1;
 
-                // Draw connections
+                // Draw connections — reduced distance from 120 to 80 for fewer lines
                 for (let i = 0; i < particles.length; i++) {
                     for (let j = i + 1; j < particles.length; j++) {
                         const dx = particles[i].x - particles[j].x;
                         const dy = particles[i].y - particles[j].y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        if (dist < 120) {
+                        const dist = dx * dx + dy * dy; // Skip sqrt for perf
+                        if (dist < 6400) { // 80*80
                             ctx.beginPath();
                             ctx.moveTo(particles[i].x, particles[i].y);
                             ctx.lineTo(particles[j].x, particles[j].y);
-                            ctx.strokeStyle = 'rgba(0,229,255,' + (0.05 * (1 - dist / 120)) + ')';
+                            ctx.strokeStyle = 'rgba(0,229,255,' + (0.05 * (1 - Math.sqrt(dist) / 80)) + ')';
                             ctx.stroke();
                         }
                     }
@@ -1543,7 +1525,7 @@
             buildQuickCommands();
             initParticles();
             updateClock(); setInterval(updateClock, 1000);
-            updateMetrics(); setInterval(updateMetrics, 5000);
+            updateMetrics(); setInterval(updateMetrics, 8000);
             document.addEventListener('mousemove', trackEye);
 
             setTimeout(() => {
@@ -1569,16 +1551,21 @@
             document.getElementById('topbarClock').textContent = new Date().toLocaleTimeString(locale);
         }
 
-        // ==================== EYE TRACKING ====================
+        // ==================== EYE TRACKING (throttled) ====================
+        let _eyeRAF = null;
         function trackEye(e) {
-            const eye = document.getElementById('eyeOuter');
-            if (!eye) return;
-            const rect = eye.getBoundingClientRect();
-            const cx = rect.left + rect.width / 2;
-            const cy = rect.top + rect.height / 2;
-            const dx = (e.clientX - cx) / window.innerWidth * 16;
-            const dy = (e.clientY - cy) / window.innerHeight * 16;
-            document.getElementById('eyeIris').style.transform = `translate(${dx}px, ${dy}px)`;
+            if (_eyeRAF) return;
+            _eyeRAF = requestAnimationFrame(() => {
+                _eyeRAF = null;
+                const eye = document.getElementById('eyeOuter');
+                if (!eye) return;
+                const rect = eye.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                const dx = (e.clientX - cx) / window.innerWidth * 16;
+                const dy = (e.clientY - cy) / window.innerHeight * 16;
+                document.getElementById('eyeIris').style.transform = `translate(${dx}px, ${dy}px)`;
+            });
         }
 
         function setEmotion(emotion) {
@@ -1634,13 +1621,24 @@
         }
 
         // ==================== METRICS ====================
-        async function updateMetrics() {
+        // Unified system stats fetcher — single /api/system/stats call instead of 3 separate
+        let _lastStats = null;
+        async function fetchSystemStats() {
             try {
-                const [cpu, mem, disk] = await Promise.all([
-                    fetch('/api/system/cpu').then(r => r.json()),
-                    fetch('/api/system/memory').then(r => r.json()),
-                    fetch('/api/system/disk').then(r => r.json()),
-                ]);
+                const res = await fetch('/api/system/stats');
+                _lastStats = await res.json();
+                return _lastStats;
+            } catch (e) {
+                console.error('Stats fetch error:', e);
+                return _lastStats;
+            }
+        }
+
+        async function updateMetrics() {
+            const stats = await fetchSystemStats();
+            if (!stats) return;
+            try {
+                const cpu = stats.cpu, mem = stats.memory, disk = stats.disk;
                 const cpuPct = cpu.cpu_usage_total || 0;
                 document.getElementById('cpuPercent').textContent = cpuPct + '%';
                 const cpuBar = document.getElementById('cpuBar');
@@ -1660,6 +1658,12 @@
                 diskBar.className = 'metric-bar-fill' + (diskPct > 80 ? ' danger' : diskPct > 60 ? ' warning' : '');
 
                 if (cpu.temperature) document.getElementById('tempValue').textContent = cpu.temperature + '°C';
+
+                // Also update dashboard bars (no separate call needed)
+                setDashBar('dashCpuBar', 'dashCpuVal', cpuPct);
+                setDashBar('dashRamBar', 'dashRamVal', ramPct);
+                setDashBar('dashDiskBar', 'dashDiskVal', diskPct);
+                updateDashAlerts(cpuPct, ramPct, diskPct);
             } catch (e) { console.error('Metrics error:', e); }
         }
 
@@ -2014,6 +2018,7 @@
             let angle = 0, pulse = 0;
 
             function draw() {
+                if (!_pageVisible) { requestAnimationFrame(draw); return; }
                 ctx.clearRect(0, 0, 200, 200);
                 pulse += 0.03;
                 angle += 0.008;
@@ -2092,6 +2097,7 @@
             }
 
             function draw() {
+                if (!_pageVisible) { requestAnimationFrame(draw); return; }
                 ctx.clearRect(0, 0, 160, 160);
                 sweepAngle += 0.02;
 
@@ -2153,6 +2159,7 @@
             let pulse = 0;
 
             function draw() {
+                if (!_pageVisible) { requestAnimationFrame(draw); return; }
                 ctx.clearRect(0, 0, w, h);
                 pulse += 0.03;
                 edges.forEach(([a, b]) => {
@@ -2238,22 +2245,7 @@
         }
 
         // ==================== DASHBOARD STATUS (v5.0) ====================
-        async function updateDashboardStatus() {
-            try {
-                const [cpu, mem, disk] = await Promise.all([
-                    fetch('/api/system/cpu').then(r => r.json()),
-                    fetch('/api/system/memory').then(r => r.json()),
-                    fetch('/api/system/disk').then(r => r.json()),
-                ]);
-                const cpuPct = cpu.cpu_usage_total || 0;
-                setDashBar('dashCpuBar', 'dashCpuVal', cpuPct);
-                const ramPct = mem.percentage || 0;
-                setDashBar('dashRamBar', 'dashRamVal', ramPct);
-                const diskPct = disk.partitions?.[0]?.percentage || 0;
-                setDashBar('dashDiskBar', 'dashDiskVal', diskPct);
-                updateDashAlerts(cpuPct, ramPct, diskPct);
-            } catch(e) {}
-        }
+        // NOTE: Dashboard status is now updated via unified updateMetrics() — no separate fetch needed
 
         function setDashBar(barId, valId, pct) {
             const bar = document.getElementById(barId);
@@ -2737,8 +2729,7 @@
             setInterval(addActivityItem, 8000);
             for (let i = 0; i < 3; i++) addExperimentLog();
             setInterval(addExperimentLog, 12000);
-            updateDashboardStatus();
-            setInterval(updateDashboardStatus, 5000);
+            // Dashboard status now updated via unified updateMetrics() timer
             showRandomGladosMsg();
             setInterval(showRandomGladosMsg, 15000);
             setInterval(() => { if (Math.random() < 0.5) showGladosToast(); }, 90000);
