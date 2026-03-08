@@ -1,9 +1,10 @@
 {
-  "version": "6.1.2",
+  "version": "6.1.3",
   "codename": "GLaDOS Voice Reborn",
-  "build": 6,
-  "updated": "2026-03-06 21:49:49",
+  "build": 7,
+  "updated": "2026-03-07 20:11:47",
   "changelog": [
+    "v6.1.3 - Added: pre-commit, version_bump.py; Updated: .gitignore, README.md, install.sh",
     "v6.1.2 - TTS po polsku (Paulina/Zofia/pl-PL), naprawa g4f providers, polski fallback, kompletna polonizacja UI",
     "v6.1.1 - Naprawa g4f: provider chain (OperaAria/Yqcloud/ApiAirforce), fallback po polsku, fix routingu konwersacji",
     "v6.1.0 - Pełna polonizacja: boot, terminal, aktywność, alerty, codelab, UI. System prompt wzmocniony dla polskiego.",

@@ -170,10 +170,13 @@ G.L.A.D.O.S---Experimental/
 ├── system_panel_app.py           # Main Flask application (2000+ lines — AI engine, routes, security)
 ├── requirements_system_panel.txt # Python dependencies
 ├── VERSION.json                  # Semantic version, codename & changelog
+├── version_bump.py               # Automatic version bump tool
 ├── LICENSE                       # GNU General Public License v3.0
 ├── install.sh                    # Automated installer
 ├── start_glados.sh               # Launcher script (created by installer)
 ├── .gitignore                    # Git ignore rules
+├── hooks/
+│   └── pre-commit                # Git hook — auto version bump on commit
 ├── i18n/
 │   ├── en.json                   # English translations
 │   └── pl.json                   # Polish translations (default)
@@ -185,6 +188,39 @@ G.L.A.D.O.S---Experimental/
     └── system_panel/
         └── dashboard.html        # Main dashboard UI (glass morphism, boot screen, voice)
 ```
+
+---
+
+## 🔄 Automatic Versioning
+
+The project uses **automatic semantic versioning**. Every `git commit` automatically bumps the version in `VERSION.json`:
+
+| Change type | Trigger | Example |
+|-------------|---------|---------|
+| **PATCH** (x.y.Z) | Default — bug fixes, docs, small changes | 6.1.2 → 6.1.3 |
+| **MINOR** (x.Y.0) | 2+ new feature files added | 6.1.3 → 6.2.0 |
+| **MAJOR** (X.0.0) | 500+ line changes in core app | 6.2.0 → 7.0.0 |
+
+The version bump happens automatically via a **git pre-commit hook**. You can also bump manually:
+
+```bash
+# Auto-detect from staged changes
+python version_bump.py
+
+# Manual bump with note
+python version_bump.py patch "Fixed login bug"
+python version_bump.py minor "Added new dashboard widget"
+python version_bump.py major "Complete UI rewrite"
+```
+
+Or via the API (when the panel is running):
+```bash
+curl -X POST http://localhost:9797/api/version/bump \
+  -H "Content-Type: application/json" \
+  -d '{"type": "patch", "note": "Bug fix"}'
+```
+
+After running `./install.sh`, the git hook is configured automatically.
 
 ---
 

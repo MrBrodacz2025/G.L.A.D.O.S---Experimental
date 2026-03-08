@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# ============================================
+# G.L.A.D.O.S — Git pre-commit hook
+# Auto-bumps VERSION.json on every commit
+# ============================================
+
+SCRIPT_DIR="$(git rev-parse --show-toplevel 2>/dev/null)"
+BUMP_SCRIPT="$SCRIPT_DIR/version_bump.py"
+
+if [ ! -f "$BUMP_SCRIPT" ]; then
+    exit 0
+fi
+
+# Check if VERSION.json is already manually staged with changes
+# (user may have bumped manually via API — skip auto-bump)
+if git diff --cached --name-only | grep -q "^VERSION.json$"; then
+    exit 0
+fi
+
+# Check if there are any staged changes (besides VERSION.json)
+STAGED=$(git diff --cached --name-only | grep -v "^VERSION.json$")
+if [ -z "$STAGED" ]; then
+    exit 0
+fi
+
+echo ""
+echo -e "\033[0;36m  [GLaDOS]\033[0m Auto-bumping version..."
+
+# Detect bump type from commit message if available
+# In pre-commit, the message file might not exist yet, so we rely on file analysis
+PYTHON_CMD="python3"
+if [ -d "$SCRIPT_DIR/venv" ] && [ -f "$SCRIPT_DIR/venv/bin/python" ]; then
+    PYTHON_CMD="$SCRIPT_DIR/venv/bin/python"
+elif ! command -v python3 &>/dev/null; then
+    PYTHON_CMD="python"
+fi
+
+"$PYTHON_CMD" "$BUMP_SCRIPT"
+
+echo ""

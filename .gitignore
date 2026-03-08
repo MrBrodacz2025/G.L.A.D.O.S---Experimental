@@ -4,3 +4,4 @@ __pycache__/
 *.bak_*
 venv/
 start_glados.sh
+.install.log
